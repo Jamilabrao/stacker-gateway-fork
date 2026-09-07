@@ -1295,6 +1295,7 @@ function buildCajuPaySessionPayload() {
     if (props.subscriptionPlanId) payload.subscription_plan_id = props.subscriptionPlanId;
     if (props.checkoutSessionToken) payload.checkout_session_token = props.checkoutSessionToken;
     if (props.displayCurrency) payload.display_currency = props.displayCurrency;
+    if (props.checkoutLocale) payload.checkout_locale = props.checkoutLocale;
     if (Array.isArray(props.orderBumpIds) && props.orderBumpIds.length > 0) {
         payload.order_bump_ids = props.orderBumpIds
             .map((id) => (typeof id === 'number' ? id : parseInt(id, 10)))
@@ -1517,6 +1518,7 @@ async function postCajuPayConfirmOrder() {
         name: showName.value ? form.name : '',
         cpf: showCpf.value ? (form.cpf || '').replace(/\D/g, '') : '',
         phone: showPhone.value ? form.country_code + phoneDigits.value : '',
+        installments: cajupayMountRef.value?.getInstallments?.() ?? 1,
     };
     appendUtmsAndAffiliate(orderPayload);
     const orderRes = await axios.post('/checkout/cajupay/confirm-order', orderPayload, {
@@ -3163,6 +3165,7 @@ function submit() {
                             :session-token="cajupaySessionToken"
                             :api-base-url="cajupaySdkBaseUrl"
                             :initial-payer="{ name: form.name, email: form.email, document: (form.cpf || '').replace(/\D/g, '') }"
+                            :locale="(checkoutLocale || '').replace('_', '-')"
                             :before-wallet-prime="beforeCajuPayWalletPrime"
                             container-id="cajupay-method"
                         />

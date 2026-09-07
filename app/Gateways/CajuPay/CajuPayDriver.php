@@ -5,6 +5,7 @@ namespace App\Gateways\CajuPay;
 use App\Gateways\Contracts\GatewayDriver;
 use App\Support\BrazilianDocuments;
 use App\Support\CajuPayPaymentId;
+use App\Support\CardInstallments;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -12,6 +13,8 @@ use Illuminate\Support\Str;
 
 class CajuPayDriver implements GatewayDriver
 {
+    public const MIN_CHARGE_AMOUNT_CENTS = 200;
+
     private function baseUrl(array $credentials): string
     {
         $override = isset($credentials['base_url']) ? trim((string) $credentials['base_url']) : '';
@@ -678,6 +681,7 @@ class CajuPayDriver implements GatewayDriver
     /**
      * @param  array<string, mixed>  $credentials
      * @param  array<int, string>  $allowedMethods
+     * @param  array<string, mixed>  $options  locale, partner_checkout_url, allow_card_installments, card_max_installments
      * @return array{token: string, checkout_session_id: string, raw: array<string, mixed>}
      */
     public function createSdkCheckoutSession(
@@ -687,23 +691,25 @@ class CajuPayDriver implements GatewayDriver
         string $externalId,
         array $consumer,
         array $allowedMethods,
-        string $defaultMethod
+        string $defaultMethod,
+        array $options = []
     ): array {
         if (! $this->hasApiKeys($credentials)) {
             throw new \RuntimeException('CajuPay: configure a chave pública e a chave secreta da API (painel CajuPay → API / Chaves).');
         }
 
-        if ($amountCents < 1) {
-            throw new \RuntimeException('CajuPay: valor inválido.');
+        if ($amountCents < self::MIN_CHARGE_AMOUNT_CENTS) {
+            throw new \RuntimeException('CajuPay: valor mínimo de cobrança é R$ 2,00.');
         }
 
+        $allowCard = in_array('card', $allowedMethods, true);
         $body = [
             'amount_cents' => $amountCents,
             'currency' => 'BRL',
             'description' => $description !== '' ? $description : ('Pedido #'.$externalId),
-            'allow_card' => in_array('card', $allowedMethods, true),
-            'allow_boleto' => in_array('boleto', $allowedMethods, true),
-            'allow_pix' => in_array('pix', $allowedMethods, true),
+            'allow_card' => $allowCard,
+            'allow_boleto' => false,
+            'allow_pix' => false,
             'allow_apple_pay' => in_array('apple_pay', $allowedMethods, true),
             'allow_google_pay' => in_array('google_pay', $allowedMethods, true),
             'metadata' => [
@@ -711,6 +717,22 @@ class CajuPayDriver implements GatewayDriver
                 'source' => 'getfy',
             ],
         ];
+
+        $maxInstallments = CardInstallments::normalizeMax((int) ($options['card_max_installments'] ?? 1));
+        if (! empty($options['allow_card_installments']) && $allowCard && $defaultMethod === 'card' && $maxInstallments >= 2) {
+            $body['allow_card_installments'] = true;
+            $body['card_max_installments'] = $maxInstallments;
+        }
+
+        $locale = trim((string) ($options['locale'] ?? ''));
+        if ($locale !== '') {
+            $body['locale'] = substr($locale, 0, 16);
+        }
+
+        $partnerCheckoutUrl = trim((string) ($options['partner_checkout_url'] ?? ''));
+        if ($partnerCheckoutUrl !== '') {
+            $body['partner_checkout_url'] = $partnerCheckoutUrl;
+        }
 
         $rawName = trim((string) ($consumer['name'] ?? ''));
         $email = $this->sanitizeEmail((string) ($consumer['email'] ?? ''));

@@ -89,7 +89,7 @@ class CardInstallmentsProductCheckoutTest extends TestCase
                 ->where('checkout_gateway_ui.card_installments_gateway_name', 'Pagar.me'));
     }
 
-    public function test_product_edit_hides_installments_when_only_cajupay_card_is_connected(): void
+    public function test_product_edit_shows_installments_when_only_cajupay_card_is_connected(): void
     {
         $this->setCardOrder(['cajupay', 'pagarme']);
         $this->connectGateway('cajupay', [
@@ -108,7 +108,8 @@ class CardInstallmentsProductCheckoutTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Produtos/Edit')
-                ->where('checkout_gateway_ui.card_show_installments', false));
+                ->where('checkout_gateway_ui.card_show_installments', true)
+                ->where('checkout_gateway_ui.card_installments_gateway_name', 'CajuPay'));
     }
 
     public function test_subscription_product_save_forces_installments_off(): void

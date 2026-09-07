@@ -34,6 +34,7 @@ use App\Services\Meta\MetaTrackingService;
 use App\Services\MetricsTracking\MetricsCaptureService;
 use App\Models\MetricsEvent;
 use App\Services\PaymentService;
+use App\Services\CajuPay\CajuPaySdkCheckoutService;
 use App\Services\PhysicalProductAccess;
 use App\Services\PushinPayPixRecorrenteService;
 use App\Services\Versell\VersellPixRecorrenteService;
@@ -2197,6 +2198,7 @@ class CheckoutController extends Controller
             'turnstile_token' => ['nullable', 'string', 'max:2048'],
             'display_currency' => ['nullable', 'string', 'in:BRL,USD,EUR'],
             'coupon_code' => ['nullable', 'string', 'max:64'],
+            'checkout_locale' => ['nullable', 'string', 'max:16'],
         ];
         foreach (CheckoutSession::TRACKING_FIELD_KEYS as $trackingKey) {
             $rules[$trackingKey] = ['nullable', 'string', 'max:2048'];
@@ -2260,6 +2262,31 @@ class CheckoutController extends Controller
         }
         $allowedMethods = array_values(array_unique($allowedMethods));
 
+        $defaultsConfig = Product::defaultCheckoutConfig();
+        $offer = $context['offer'] ?? null;
+        if ($plan && is_array($plan->checkout_config) && $plan->checkout_config !== []) {
+            $checkoutConfig = array_replace_recursive($defaultsConfig, $plan->checkout_config);
+        } elseif ($offer && is_array($offer->checkout_config) && $offer->checkout_config !== []) {
+            $checkoutConfig = array_replace_recursive($defaultsConfig, $offer->checkout_config);
+        } else {
+            $checkoutConfig = array_replace_recursive($defaultsConfig, $product->checkout_config ?? []);
+        }
+        $installmentFlags = CajuPaySdkCheckoutService::cardInstallmentSessionOptions(
+            $checkoutConfig,
+            $totalAmount,
+            $plan !== null,
+            $method
+        );
+        $sessionOptions = array_merge($installmentFlags, [
+            'locale' => CajuPayBrowserSdk::localeFromCheckout(
+                is_string($validated['checkout_locale'] ?? null) ? $validated['checkout_locale'] : 'pt_BR'
+            ),
+            'partner_checkout_url' => CajuPayBrowserSdk::partnerCheckoutUrl(
+                $request,
+                (string) ($product->checkout_slug ?? '')
+            ),
+        ]);
+
         $externalRef = (string) Str::uuid();
 
         try {
@@ -2275,7 +2302,8 @@ class CheckoutController extends Controller
                 $externalRef,
                 [],
                 $allowedMethods,
-                $defaultMethodMap[$method] ?? 'card'
+                $defaultMethodMap[$method] ?? 'card',
+                $sessionOptions
             );
         } catch (\Throwable $e) {
             Log::warning('CajuPaySession: falha ao criar sessão SDK', [
@@ -2304,6 +2332,8 @@ class CheckoutController extends Controller
             'shipping_amount' => (float) ($context['shipping_amount'] ?? 0),
             'cajupay_token' => $sessionResult['token'],
             'checkout_session_id' => $sessionResult['checkout_session_id'],
+            'card_installments_enabled' => ! empty($installmentFlags['allow_card_installments']),
+            'card_max_installments' => (int) ($installmentFlags['card_max_installments'] ?? 1),
             'tenant_id' => $product->tenant_id,
             'external_id' => $externalRef,
             'methods_available' => $availableMethods,
@@ -2340,6 +2370,7 @@ class CheckoutController extends Controller
             'fbp' => ['nullable', 'string', 'max:512'],
             'fbc' => ['nullable', 'string', 'max:512'],
             'user_agent' => ['nullable', 'string', 'max:2048'],
+            'installments' => ['nullable', 'integer', 'min:1', 'max:12'],
         ];
         foreach (CheckoutSession::TRACKING_FIELD_KEYS as $trackingKey) {
             $rules[$trackingKey] = ['nullable', 'string', 'max:2048'];
@@ -3065,6 +3096,13 @@ class CheckoutController extends Controller
             $orderMetadata['cajupay_session_token'] = $cajupayToken;
             $orderMetadata['cajupay_sdk_token'] = $cajupayToken;
             $orderMetadata['cajupay_checkout_session_id'] = $draft['checkout_session_id'] ?? null;
+            $orderMetadata['installments'] = CardInstallments::clamp(
+                (int) ($validated['installments'] ?? 1),
+                (bool) ($draft['card_installments_enabled'] ?? false),
+                (int) ($draft['card_max_installments'] ?? 1),
+                $totalAmount,
+                ! empty($draft['subscription_plan_id'])
+            );
         }
         if ($product->type === Product::TYPE_AREA_MEMBROS && $plainPassword !== null) {
             Cache::put('access_password.'.$user->id.'.'.$product->id, $plainPassword, now()->addHours(2));

@@ -13,7 +13,6 @@ class CoproductionPanelController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $tenantId = CoproductionCommissionQuery::tenantIdForUser($user);
 
         $transactions = [
             'data' => [],
@@ -28,7 +27,7 @@ class CoproductionPanelController extends Controller
 
         if (Schema::hasTable('wallet_transactions')) {
             $paginator = CoproductionCommissionQuery::applyFilters(
-                CoproductionCommissionQuery::baseQuery($tenantId),
+                CoproductionCommissionQuery::baseQuery($user),
                 $request,
                 $user
             )

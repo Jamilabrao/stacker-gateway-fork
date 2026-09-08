@@ -6,6 +6,7 @@ use App\Events\OrderCompleted;
 use App\Models\Order;
 use App\Models\PanelNotification;
 use App\Models\ProductCoproducer;
+use App\Models\TenantWallet;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use Illuminate\Support\Facades\Schema;
@@ -150,6 +151,57 @@ class ProductCoproductionTest extends TestCase
             ->where('vendas.data.0.is_coproduction_commission', true)
             ->where('vendas.data.0.commission_percent', 30)
         );
+    }
+
+    public function test_coproducer_sees_commission_in_panel_and_wallet_balance(): void
+    {
+        if (! Schema::hasTable('wallet_transactions') || ! Schema::hasTable('product_coproducers') || ! Schema::hasTable('tenant_wallets')) {
+            $this->markTestSkipped('wallet or coproducers');
+        }
+
+        $fixture = $this->createActiveCoproductionFixture();
+        $this->completeCoproductionOrder($fixture['seller'], $fixture['coproducer'], $fixture['product']);
+
+        $this->actingAs($fixture['coproducer'])->get(route('coproducao.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Coproducao/Index')
+                ->where('stats.total_transacoes', 1)
+            );
+
+        $wallet = TenantWallet::query()
+            ->where('tenant_id', $fixture['coproducer']->tenant_id ?? $fixture['coproducer']->id)
+            ->first();
+        $this->assertNotNull($wallet);
+        $pending = (float) ($wallet->pending_pix ?? 0) + (float) ($wallet->available_pix ?? 0);
+        $this->assertGreaterThan(0, $pending);
+    }
+
+    public function test_coproducer_sees_sale_even_if_wallet_meta_lacks_json_flag(): void
+    {
+        if (! Schema::hasTable('wallet_transactions') || ! Schema::hasTable('product_coproducers')) {
+            $this->markTestSkipped('wallet or coproducers');
+        }
+
+        $fixture = $this->createActiveCoproductionFixture();
+        $order = $this->completeCoproductionOrder($fixture['seller'], $fixture['coproducer'], $fixture['product']);
+
+        WalletTransaction::query()
+            ->where('order_id', $order->id)
+            ->where('tenant_id', $fixture['coproducer']->id)
+            ->get()
+            ->each(function (WalletTransaction $tx) {
+                $tx->meta = ['payment_method' => 'pix'];
+                $tx->save();
+            });
+
+        $this->actingAs($fixture['coproducer'])->get(route('vendas.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Vendas/Index')
+                ->has('vendas.data', 1)
+                ->where('vendas.data.0.is_coproduction_commission', true)
+            );
     }
 
     public function test_coproducer_can_view_but_not_edit_product(): void

@@ -222,6 +222,22 @@ class ProductCoproducer extends Model
     }
 
     /**
+     * Tenant da carteira do co-produtor — o mesmo critério de CoproductionCommissionQuery::tenantIdForUser.
+     */
+    public static function walletTenantIdFor(self $row): int
+    {
+        $user = $row->relationLoaded('coProducer')
+            ? $row->coProducer
+            : ($row->co_producer_user_id ? User::query()->find((int) $row->co_producer_user_id) : null);
+
+        if ($user instanceof User) {
+            return (int) ($user->tenant_id ?? $user->id);
+        }
+
+        return (int) $row->co_producer_user_id;
+    }
+
+    /**
      * @return array<int, array{tenant_id: int, gross: float, product_coproducer_id: int|null, role: string}>
      */
     public static function buildGrossSlicesForOrder(Order $order, float $grossTotal, bool $isAffiliateSale): array
@@ -238,8 +254,10 @@ class ProductCoproducer extends Model
             return [['tenant_id' => $sellerTenantId, 'gross' => $grossTotal, 'product_coproducer_id' => null, 'role' => 'seller']];
         }
 
+        $productIdStr = (string) $productId;
         $rows = static::query()
-            ->where('product_id', $productId)
+            ->with(['coProducer:id,tenant_id'])
+            ->where('product_id', $productIdStr)
             ->where('status', self::STATUS_ACTIVE)
             ->whereNotNull('co_producer_user_id')
             ->where(function ($q) {
@@ -248,7 +266,9 @@ class ProductCoproducer extends Model
             ->where(function ($q) {
                 $q->whereNull('ends_at')->orWhere('ends_at', '>', now());
             })
-            ->get();
+            ->get()
+            ->filter(fn (self $row) => (string) $row->product_id === $productIdStr)
+            ->values();
 
         $eligible = $rows->filter(function (ProductCoproducer $row) use ($isAffiliateSale) {
             if ($isAffiliateSale) {
@@ -305,7 +325,7 @@ class ProductCoproducer extends Model
                     $remaining = round($remaining - $sliceGross, 2);
                 }
             }
-            $coproducerTenant = (int) $row->co_producer_user_id;
+            $coproducerTenant = self::walletTenantIdFor($row);
             if ($coproducerTenant > 0 && $sliceGross > 0.0001) {
                 $coproducerSlices[] = [
                     'tenant_id' => $coproducerTenant,

@@ -26,12 +26,7 @@ class NotifyCoproducersOnOrderCompleted
                     WalletTransaction::TYPE_CREDIT_SALE,
                     WalletTransaction::TYPE_CREDIT_SALE_PENDING,
                 ])
-                ->where(function ($q) {
-                    $q->where('meta->coproduction_role', 'coproducer')
-                        ->orWhere('meta->coproduction', true)
-                        ->orWhere('meta->coproduction', 1)
-                        ->orWhere('meta->coproduction', 'true');
-                })
+                ->coproductionCommission()
                 ->get();
 
             if ($transactions->isEmpty()) {

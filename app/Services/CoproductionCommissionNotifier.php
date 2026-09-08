@@ -22,7 +22,12 @@ class CoproductionCommissionNotifier
             return;
         }
 
-        $user = User::query()->find($coproducerTenantId);
+        $user = User::query()->find($coproducerTenantId)
+            ?? User::query()
+                ->where('tenant_id', $coproducerTenantId)
+                ->where('role', User::ROLE_INFOPRODUTOR)
+                ->orderBy('id')
+                ->first();
         if ($user === null) {
             return;
         }

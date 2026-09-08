@@ -894,7 +894,7 @@ class VendasController extends Controller
     {
         $coproRequest = $this->coproductionRequestFromVendas($request);
         $query = CoproductionCommissionQuery::applyFilters(
-            CoproductionCommissionQuery::baseQuery(CoproductionCommissionQuery::tenantIdForUser($user)),
+            CoproductionCommissionQuery::baseQuery($user),
             $coproRequest,
             $user
         );

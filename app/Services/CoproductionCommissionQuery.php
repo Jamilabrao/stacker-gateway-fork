@@ -21,19 +21,25 @@ class CoproductionCommissionQuery
         return (int) ($user->tenant_id ?? $user->id);
     }
 
-    public static function baseQuery(int $tenantId): Builder
+    public static function baseQuery(User $user): Builder
     {
+        $tenantId = self::tenantIdForUser($user);
+        $productIds = self::productIdsForCoproducer($user);
+
         return WalletTransaction::query()
             ->where('wallet_transactions.tenant_id', $tenantId)
             ->whereIn('wallet_transactions.type', [
                 WalletTransaction::TYPE_CREDIT_SALE,
                 WalletTransaction::TYPE_CREDIT_SALE_PENDING,
             ])
-            ->where(function (Builder $q) {
-                $q->where('wallet_transactions.meta->coproduction_role', 'coproducer')
-                    ->orWhere('wallet_transactions.meta->coproduction', true)
-                    ->orWhere('wallet_transactions.meta->coproduction', 1)
-                    ->orWhere('wallet_transactions.meta->coproduction', 'true');
+            ->where(function (Builder $q) use ($tenantId, $productIds) {
+                $q->coproductionCommission();
+                if ($productIds !== []) {
+                    $q->orWhereHas('order', function (Builder $oq) use ($tenantId, $productIds) {
+                        $oq->where('orders.tenant_id', '!=', $tenantId)
+                            ->whereIn('orders.product_id', $productIds);
+                    });
+                }
             })
             ->with([
                 'order:id,tenant_id,product_id,status,payment_method,email,user_id,amount,public_reference,created_at',
@@ -128,8 +134,7 @@ class CoproductionCommissionQuery
             ];
         }
 
-        $tenantId = self::tenantIdForUser($user);
-        $base = self::applyFilters(self::baseQuery($tenantId), $request, $user);
+        $base = self::applyFilters(self::baseQuery($user), $request, $user);
 
         $rows = (clone $base)->get(['type', 'amount_gross', 'amount_net']);
 

@@ -52,6 +52,62 @@ class CajuPaySdkSessionCreateTest extends TestCase
         $this->assertSame('sess-uuid-123', $result['checkout_session_id']);
     }
 
+    public function test_create_sdk_session_sends_installments_false_when_platform_disallows(): void
+    {
+        Http::fake([
+            'https://api.cajupay.com.br/api/sdk/v1/checkout/sessions' => function ($request) {
+                $body = $request->data();
+                $this->assertArrayHasKey('allow_card_installments', $body);
+                $this->assertFalse($body['allow_card_installments']);
+                $this->assertSame(1, $body['card_max_installments'] ?? null);
+
+                return Http::response([
+                    'token' => 'tok_public_off',
+                    'checkout_session_id' => 'sess-uuid-off',
+                ], 201);
+            },
+        ]);
+
+        $driver = new CajuPayDriver;
+        $driver->createSdkCheckoutSession(
+            ['public_key' => 'pk_test', 'secret_key' => 'sk_test'],
+            9900,
+            'Pedido #1',
+            'ext-1',
+            [],
+            ['card'],
+            'card',
+            ['allow_card_installments' => false]
+        );
+    }
+
+    public function test_create_sdk_session_sends_installments_false_when_options_omitted(): void
+    {
+        Http::fake([
+            'https://api.cajupay.com.br/api/sdk/v1/checkout/sessions' => function ($request) {
+                $body = $request->data();
+                $this->assertFalse($body['allow_card_installments'] ?? true);
+                $this->assertSame(1, $body['card_max_installments'] ?? null);
+
+                return Http::response([
+                    'token' => 'tok_public_omit',
+                    'checkout_session_id' => 'sess-uuid-omit',
+                ], 201);
+            },
+        ]);
+
+        $driver = new CajuPayDriver;
+        $driver->createSdkCheckoutSession(
+            ['public_key' => 'pk_test', 'secret_key' => 'sk_test'],
+            9900,
+            'Pedido #1',
+            'ext-1',
+            [],
+            ['card'],
+            'card'
+        );
+    }
+
     public function test_create_sdk_session_rejects_amount_below_two_reais(): void
     {
         $driver = new CajuPayDriver;
@@ -79,6 +135,7 @@ class CajuPaySdkSessionCreateTest extends TestCase
             'card'
         );
         $this->assertFalse($off['allow_card_installments']);
+        $this->assertSame(1, $off['card_max_installments']);
 
         $wallet = CajuPaySdkCheckoutService::cardInstallmentSessionOptions(
             ['card_installments' => ['enabled' => true, 'max' => 6]],
@@ -87,6 +144,7 @@ class CajuPaySdkSessionCreateTest extends TestCase
             'apple_pay'
         );
         $this->assertFalse($wallet['allow_card_installments']);
+        $this->assertSame(1, $wallet['card_max_installments']);
 
         $on = CajuPaySdkCheckoutService::cardInstallmentSessionOptions(
             ['card_installments' => ['enabled' => true, 'max' => 6]],

@@ -719,9 +719,14 @@ class CajuPayDriver implements GatewayDriver
         ];
 
         $maxInstallments = CardInstallments::normalizeMax((int) ($options['card_max_installments'] ?? 1));
-        if (! empty($options['allow_card_installments']) && $allowCard && $defaultMethod === 'card' && $maxInstallments >= 2) {
-            $body['allow_card_installments'] = true;
-            $body['card_max_installments'] = $maxInstallments;
+        $allowInstallments = $allowCard
+            && $defaultMethod === 'card'
+            && ! empty($options['allow_card_installments'])
+            && $maxInstallments >= 2;
+        // Sempre enviar o par: omitir false faz a Caju cair no teto da conta (Admin).
+        if ($allowCard) {
+            $body['allow_card_installments'] = $allowInstallments;
+            $body['card_max_installments'] = $allowInstallments ? $maxInstallments : 1;
         }
 
         $locale = trim((string) ($options['locale'] ?? ''));

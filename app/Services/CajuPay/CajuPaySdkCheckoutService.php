@@ -17,7 +17,7 @@ class CajuPaySdkCheckoutService
      * Flags de parcelamento Cartão Brasil para POST /api/sdk/v1/checkout/sessions.
      *
      * @param  array<string, mixed>  $checkoutConfig
-     * @return array{allow_card_installments: bool, card_max_installments?: int}
+     * @return array{allow_card_installments: bool, card_max_installments: int}
      */
     public static function cardInstallmentSessionOptions(
         array $checkoutConfig,
@@ -26,7 +26,7 @@ class CajuPaySdkCheckoutService
         string $method
     ): array {
         if ($method !== 'card') {
-            return ['allow_card_installments' => false];
+            return ['allow_card_installments' => false, 'card_max_installments' => 1];
         }
 
         $raw = $checkoutConfig['card_installments'] ?? [];
@@ -36,7 +36,7 @@ class CajuPaySdkCheckoutService
         );
         $max = CardInstallments::maxAllowedForAmount($amountBrl, $resolved['max']);
         if (! $resolved['enabled'] || $max < 2) {
-            return ['allow_card_installments' => false];
+            return ['allow_card_installments' => false, 'card_max_installments' => 1];
         }
 
         return [

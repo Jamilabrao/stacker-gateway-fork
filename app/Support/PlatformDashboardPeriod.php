@@ -6,7 +6,7 @@ use Carbon\Carbon;
 
 final class PlatformDashboardPeriod
 {
-    public const PERIODS = ['hoje', 'ontem', '7dias', 'mes', 'ano', 'total'];
+    public const PERIODS = ['hoje', 'ontem', '7dias', 'mes', 'ano', 'total', 'personalizado'];
 
     public static function normalize(?string $period): string
     {
@@ -15,10 +15,22 @@ final class PlatformDashboardPeriod
         return in_array($period, self::PERIODS, true) ? $period : 'hoje';
     }
 
+    public static function normalizeDate(mixed $date): ?string
+    {
+        if (! is_string($date) || trim($date) === '') {
+            return null;
+        }
+        try {
+            return Carbon::parse($date)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     /**
      * @return array{0: ?string, 1: ?string}
      */
-    public static function range(string $period): array
+    public static function range(string $period, ?string $fromDate = null, ?string $toDate = null): array
     {
         $now = Carbon::now();
         $start = null;
@@ -44,6 +56,15 @@ final class PlatformDashboardPeriod
             case 'ano':
                 $start = $now->copy()->startOfYear();
                 $end = $now->copy()->endOfYear();
+                break;
+            case 'personalizado':
+                $from = $fromDate ? Carbon::parse($fromDate)->startOfDay() : $now->copy()->startOfDay();
+                $to = $toDate ? Carbon::parse($toDate)->endOfDay() : $now->copy()->endOfDay();
+                if ($to->lt($from)) {
+                    [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+                }
+                $start = $from;
+                $end = $to;
                 break;
             case 'total':
                 break;
@@ -72,8 +93,22 @@ final class PlatformDashboardPeriod
         return [$prevStart->toDateTimeString(), $prevEnd->toDateTimeString()];
     }
 
-    public static function granularity(string $period): string
+    public static function granularity(string $period, ?string $start = null, ?string $end = null): string
     {
+        if ($period === 'personalizado' && $start && $end) {
+            $from = Carbon::parse($start)->startOfDay();
+            $to = Carbon::parse($end)->startOfDay();
+            $days = (int) abs($from->diffInDays($to)) + 1;
+            if ($days <= 1) {
+                return 'hour';
+            }
+            if ($days > 62) {
+                return 'month';
+            }
+
+            return 'day';
+        }
+
         return match ($period) {
             'hoje', 'ontem' => 'hour',
             'ano', 'total' => 'month',

@@ -659,7 +659,7 @@ class PlatformDashboardAnalytics
         ?string $prevEnd,
         bool $compare,
     ): array {
-        $granularity = PlatformDashboardPeriod::granularity($period);
+        $granularity = PlatformDashboardPeriod::granularity($period, $start, $end);
         $keys = self::chartKeys($period, $granularity, $start, $end);
         $current = self::chartSeries($granularity, $start, $end);
         $previous = $compare ? self::chartSeries($granularity, $prevStart, $prevEnd) : [

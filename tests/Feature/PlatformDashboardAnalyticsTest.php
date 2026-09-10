@@ -163,6 +163,59 @@ class PlatformDashboardAnalyticsTest extends TestCase
             );
     }
 
+    public function test_custom_period_filters_sales_by_date_range(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-21 12:00:00'));
+        $admin = $this->platformAdmin();
+        $seller = $this->infoprodutor();
+        $buyer = User::factory()->create(['role' => User::ROLE_CLIENTE]);
+        $product = $this->createTestProduct(['tenant_id' => $seller->id]);
+
+        $inRangeA = $this->createOrder($seller, $buyer, $product, ['status' => 'completed', 'amount' => 100]);
+        $inRangeB = $this->createOrder($seller, $buyer, $product, ['status' => 'completed', 'amount' => 50]);
+        $outside = $this->createOrder($seller, $buyer, $product, ['status' => 'completed', 'amount' => 200]);
+
+        Order::query()->whereKey($inRangeA->id)->update([
+            'created_at' => Carbon::parse('2026-08-10 08:00:00'),
+            'updated_at' => Carbon::parse('2026-08-10 08:00:00'),
+        ]);
+        Order::query()->whereKey($inRangeB->id)->update([
+            'created_at' => Carbon::parse('2026-08-15 18:00:00'),
+            'updated_at' => Carbon::parse('2026-08-15 18:00:00'),
+        ]);
+        Order::query()->whereKey($outside->id)->update([
+            'created_at' => Carbon::parse('2026-08-21 09:00:00'),
+            'updated_at' => Carbon::parse('2026-08-21 09:00:00'),
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/plataforma/dashboard?period=personalizado&from=2026-08-10&to=2026-08-15')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('period', 'personalizado')
+                ->where('from', '2026-08-10')
+                ->where('to', '2026-08-15')
+                ->where('kpis.vendas_totais', 150)
+                ->where('kpis.quantidade_vendas', 2)
+                ->where('grafico.granularity', 'day')
+            );
+    }
+
+    public function test_custom_period_swaps_inverted_dates(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-21 12:00:00'));
+        $admin = $this->platformAdmin();
+
+        $this->actingAs($admin)
+            ->get('/plataforma/dashboard?period=personalizado&from=2026-08-15&to=2026-08-10')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('period', 'personalizado')
+                ->where('from', '2026-08-10')
+                ->where('to', '2026-08-15')
+            );
+    }
+
     public function test_seller_cannot_access_platform_dashboard(): void
     {
         $seller = $this->infoprodutor();

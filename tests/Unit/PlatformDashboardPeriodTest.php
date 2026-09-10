@@ -50,4 +50,28 @@ class PlatformDashboardPeriodTest extends TestCase
         $this->assertSame('month', PlatformDashboardPeriod::granularity('ano'));
         $this->assertSame('month', PlatformDashboardPeriod::granularity('total'));
     }
+
+    public function test_personalizado_range_uses_from_and_to_inclusive(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-21 15:30:00'));
+        [$start, $end] = PlatformDashboardPeriod::range('personalizado', '2026-08-10', '2026-08-15');
+
+        $this->assertSame('2026-08-10 00:00:00', $start);
+        $this->assertSame('2026-08-15 23:59:59', $end);
+    }
+
+    public function test_personalizado_swaps_inverted_dates(): void
+    {
+        [$start, $end] = PlatformDashboardPeriod::range('personalizado', '2026-08-15', '2026-08-10');
+
+        $this->assertSame('2026-08-10 00:00:00', $start);
+        $this->assertSame('2026-08-15 23:59:59', $end);
+    }
+
+    public function test_personalizado_granularity_depends_on_span(): void
+    {
+        $this->assertSame('hour', PlatformDashboardPeriod::granularity('personalizado', '2026-08-10 00:00:00', '2026-08-10 23:59:59'));
+        $this->assertSame('day', PlatformDashboardPeriod::granularity('personalizado', '2026-08-10 00:00:00', '2026-08-20 23:59:59'));
+        $this->assertSame('month', PlatformDashboardPeriod::granularity('personalizado', '2026-01-01 00:00:00', '2026-04-15 23:59:59'));
+    }
 }

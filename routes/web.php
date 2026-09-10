@@ -2,8 +2,8 @@
 
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Auth\TwoFactorLoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
+use App\Http\Controllers\Auth\TwoFactorLoginController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -517,6 +517,10 @@ Route::prefix('plataforma')->name('plataforma.')->group(function () {
         Route::post('/configuracoes/gateways/{slug}/test', [\App\Http\Controllers\GatewaysController::class, 'test'])->name('gateways.test');
         Route::post('/configuracoes/gateways/{slug}/certificate', [\App\Http\Controllers\GatewaysController::class, 'updateCertificate'])->name('gateways.certificate');
         Route::put('/configuracoes/gateways/{slug}/certificate', [\App\Http\Controllers\GatewaysController::class, 'updateCertificate']);
+
+        Route::get('/fiscal', [\App\Http\Controllers\Platform\FiscalController::class, 'index'])->name('fiscal.index');
+        Route::get('/fiscal/export.csv', [\App\Http\Controllers\Platform\FiscalController::class, 'exportCsv'])->name('fiscal.export.csv');
+        Route::get('/fiscal/export.xlsx', [\App\Http\Controllers\Platform\FiscalController::class, 'exportXlsx'])->name('fiscal.export.xlsx');
 
         Route::get('/financeiro', [\App\Http\Controllers\Platform\FinancialController::class, 'index'])->name('financeiro.index');
         Route::put('/financeiro/gateways/order', [\App\Http\Controllers\GatewaysController::class, 'updateOrder'])->name('financeiro.gateways.order');

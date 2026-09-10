@@ -18,6 +18,7 @@ import {
     AlertTriangle,
     Banknote,
     CircleDollarSign,
+    FileSpreadsheet,
     Code2,
     Trophy,
     BadgeCheck,
@@ -111,6 +112,7 @@ const navGroupsCore = [
             { name: 'Saques', href: '/plataforma/saques', icon: Banknote, badgeKey: 'saques' },
             { name: 'Saldo', href: '/plataforma/saldo', icon: CircleDollarSign },
             { name: 'Financeiro', href: '/plataforma/financeiro', icon: Wallet, badgeKey: 'financeiro' },
+            { name: 'Fiscal', href: '/plataforma/fiscal', icon: FileSpreadsheet },
         ],
     },
     {
@@ -211,6 +213,9 @@ function isActive(href) {
     }
     if (href === '/plataforma/financeiro') {
         return url === '/plataforma/financeiro' || url.startsWith('/plataforma/financeiro/');
+    }
+    if (href === '/plataforma/fiscal') {
+        return url === '/plataforma/fiscal' || url.startsWith('/plataforma/fiscal/');
     }
     if (href === '/plataforma/indique-e-ganhe') {
         return url === '/plataforma/indique-e-ganhe' || url.startsWith('/plataforma/indique-e-ganhe/');

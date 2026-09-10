@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
 import VueApexCharts from 'vue3-apexcharts';
 import LayoutPlatform from '@/Layouts/LayoutPlatform.vue';
@@ -31,6 +31,8 @@ const { appName } = usePlatformBranding();
 
 const props = defineProps({
     period: { type: String, default: 'hoje' },
+    from: { type: String, default: null },
+    to: { type: String, default: null },
     kpis: {
         type: Object,
         default: () => ({
@@ -100,7 +102,23 @@ const periodOptions = [
     { value: 'mes', label: 'Mês' },
     { value: 'ano', label: 'Ano' },
     { value: 'total', label: 'Total' },
+    { value: 'personalizado', label: 'Personalizado' },
 ];
+
+const fromDate = ref(props.from ?? '');
+const toDate = ref(props.to ?? '');
+
+watch(() => props.from, (value) => { fromDate.value = value ?? ''; });
+watch(() => props.to, (value) => { toDate.value = value ?? ''; });
+
+function todayIso() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+
+    return `${y}-${m}-${day}`;
+}
 
 const chartMetrics = [
     { value: 'volume', label: 'Faturamento' },
@@ -121,7 +139,25 @@ const statusLabels = {
 };
 
 function setPeriod(value) {
+    if (value === 'personalizado') {
+        const today = todayIso();
+        router.get('/plataforma/dashboard', {
+            period: 'personalizado',
+            from: fromDate.value || today,
+            to: toDate.value || today,
+        }, { preserveState: false });
+        return;
+    }
     router.get('/plataforma/dashboard', { period: value }, { preserveState: false });
+}
+
+function applyCustomPeriod() {
+    const today = todayIso();
+    router.get('/plataforma/dashboard', {
+        period: 'personalizado',
+        from: fromDate.value || today,
+        to: toDate.value || today,
+    }, { preserveState: false });
 }
 
 function formatBRL(value) {
@@ -322,21 +358,49 @@ const paymentMax = computed(() => Math.max(1, ...props.payment_methods.map((m) =
             </div>
         </div>
 
-        <nav class="flex flex-wrap items-center gap-1" aria-label="Período">
-            <button
-                v-for="opt in periodOptions"
-                :key="opt.value"
-                type="button"
-                :aria-current="period === opt.value ? 'true' : undefined"
-                class="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-                :class="period === opt.value
-                    ? 'bg-[var(--color-primary)] text-white'
-                    : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200'"
-                @click="setPeriod(opt.value)"
+        <div class="flex flex-col gap-3">
+            <nav class="flex flex-wrap items-center gap-1" aria-label="Período">
+                <button
+                    v-for="opt in periodOptions"
+                    :key="opt.value"
+                    type="button"
+                    :aria-current="period === opt.value ? 'true' : undefined"
+                    class="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+                    :class="period === opt.value
+                        ? 'bg-[var(--color-primary)] text-white'
+                        : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200'"
+                    @click="setPeriod(opt.value)"
+                >
+                    {{ opt.label }}
+                </button>
+            </nav>
+
+            <form
+                v-if="period === 'personalizado'"
+                class="flex flex-wrap items-end gap-2"
+                @submit.prevent="applyCustomPeriod"
             >
-                {{ opt.label }}
-            </button>
-        </nav>
+                <label class="text-sm text-zinc-600 dark:text-zinc-400">
+                    Data inicial
+                    <input
+                        v-model="fromDate"
+                        type="date"
+                        class="mt-1 block rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                    />
+                </label>
+                <label class="text-sm text-zinc-600 dark:text-zinc-400">
+                    Data final
+                    <input
+                        v-model="toDate"
+                        type="date"
+                        class="mt-1 block rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                    />
+                </label>
+                <button type="submit" class="h-10 rounded-xl bg-[var(--color-primary)] px-4 text-sm font-medium text-white">
+                    Aplicar
+                </button>
+            </form>
+        </div>
 
         <section class="space-y-3">
             <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Financeiro</h3>

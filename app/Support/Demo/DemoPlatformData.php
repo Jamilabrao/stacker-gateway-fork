@@ -45,6 +45,8 @@ class DemoPlatformData
 
         return [
             'period' => $period,
+            'from' => null,
+            'to' => null,
             'kpis' => [
                 'wallet_available' => round(84250.75 + ($seed % 5000), 2),
                 'wallet_pending' => round(12340.20 + ($seed % 2000), 2),

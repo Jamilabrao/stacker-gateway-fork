@@ -34,6 +34,8 @@ final class GatewayApiCredentials
             'versell' => \App\Gateways\Versell\VersellCredentials::isCashInReady($credentials),
             'cielo' => trim((string) ($credentials['merchant_id'] ?? '')) !== ''
                 && trim((string) ($credentials['merchant_key'] ?? '')) !== '',
+            'xflow' => trim((string) ($credentials['public_key'] ?? '')) !== ''
+                && trim((string) ($credentials['secret_key'] ?? '')) !== '',
             default => true,
         };
     }

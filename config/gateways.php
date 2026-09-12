@@ -61,7 +61,14 @@ return [
                 ['flag' => 'brasil.png', 'name' => 'Brasil'],
                 ['flag' => 'mexico.png', 'name' => 'México'],
             ],
-            'signup_url' => 'https://bspay.co',
+            'signup_url' => 'https://app.bspay.co/register/216dc66c430a1958147578a14e73cda4ba903873d1ff5e962c0f20b7be2184be',
+            'support_contacts' => [
+                [
+                    'name' => 'Bruno',
+                    'role' => 'Gerente de contas',
+                    'whatsapp' => '5547920034513',
+                ],
+            ],
             'driver' => \App\Gateways\Bspay\BspayDriver::class,
             'credential_keys' => [
                 ['key' => 'client_id', 'label' => 'Client ID', 'type' => 'text'],
@@ -288,6 +295,13 @@ return [
             'country_name' => 'Brasil',
             'country_flag' => 'brasil.png',
             'signup_url' => 'https://finance.versell.com.br',
+            'support_contacts' => [
+                [
+                    'name' => 'Atendimento',
+                    'role' => '',
+                    'whatsapp' => '556298498261',
+                ],
+            ],
             'driver' => \App\Gateways\Versell\VersellDriver::class,
             'credential_keys' => [
                 ['key' => 'cash_in_client_id', 'label' => 'Client ID', 'type' => 'text', 'group' => 'cash_in', 'group_label' => 'Versell — Cash In'],
@@ -326,6 +340,38 @@ return [
                 ['key' => 'sop_client_secret', 'label' => 'ClientSecret Silent Order Post (cartão)', 'type' => 'password', 'optional' => true, 'group' => 'sop', 'group_label' => 'Silent Order Post (cartão)'],
             ],
         ],
+        'xflow' => [
+            'slug' => 'xflow',
+            'name' => 'Xflow',
+            'image' => 'images/gateways/xflow_logo1.svg',
+            'methods' => ['pix'],
+            'scope' => 'national',
+            'country' => 'br',
+            'country_name' => 'Brasil',
+            'country_flag' => 'brasil.png',
+            'signup_url' => 'https://app.xflowpayments.com/cadastro?indicacao=XF-D5846D',
+            'support_contacts' => [
+                [
+                    'name' => 'Gustavo',
+                    'role' => 'Compliance',
+                    'whatsapp' => '5518976096447',
+                ],
+                [
+                    'name' => 'Andriel',
+                    'role' => 'Gerente de contas',
+                    'whatsapp' => '5511983671924',
+                ],
+            ],
+            'driver' => \App\Gateways\Xflow\XflowDriver::class,
+            'credential_keys' => [
+                ['key' => 'public_key', 'label' => 'Chave pública (pk_live_… ou pk_test_…)', 'type' => 'text'],
+                ['key' => 'secret_key', 'label' => 'Segredo (sk_live_… ou sk_test_…)', 'type' => 'password'],
+                ['key' => 'webhook_secret', 'label' => 'Segredo do webhook (HMAC — preenchido ao salvar/testar, ou cole o do painel)', 'type' => 'password', 'optional' => true],
+                ['key' => 'xflow_payout_min_brl', 'label' => 'Mínimo líquido de payout (R$)', 'type' => 'text', 'optional' => true],
+                ['key' => 'xflow_admin_fee_pix_brl', 'label' => 'Taxa PIX paga à Xflow (R$)', 'type' => 'text', 'optional' => true],
+                ['key' => 'xflow_admin_fee_payout_brl', 'label' => 'Taxa de saque paga à Xflow (R$)', 'type' => 'text', 'optional' => true],
+            ],
+        ],
     ],
 
     /*
@@ -359,6 +405,7 @@ return [
         'linaopenx',
         'versell', // Cash In + Cash Out (dict)
         'cielo',
+        'xflow',
     ],
 
     /*
@@ -367,7 +414,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'default_order' => [
-        'pix' => ['cajupay', /* 'spacepag', */ 'woovi', 'bspay', 'onlyup', 'efi', 'mercadopago', 'pagarme', 'pushinpay', 'asaas', 'versell', 'cielo'],
+        'pix' => ['cajupay', /* 'spacepag', */ 'woovi', 'bspay', 'onlyup', 'efi', 'mercadopago', 'pagarme', 'pushinpay', 'asaas', 'versell', 'cielo', 'xflow'],
         'card' => ['cajupay', 'efi', 'stripe', 'mercadopago', 'pagarme', 'asaas', 'cielo'],
         'boleto' => ['efi', 'mercadopago', 'pagarme', 'asaas'],
         'pix_auto' => ['efi', 'pushinpay', 'versell'],

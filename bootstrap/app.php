@@ -213,6 +213,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('withdrawals:reconcile-bspay --limit=80 --min-age-minutes=0')->everyMinute();
         $schedule->command('withdrawals:reconcile-cajupay --limit=80 --min-age-minutes=0')->everyTwoMinutes();
         $schedule->command('withdrawals:reconcile-versell --limit=80 --min-age-minutes=0')->everyTwoMinutes();
+        $schedule->command('withdrawals:reconcile-xflow --limit=80 --min-age-minutes=0')->everyMinute();
         $schedule->command('versell:reconcile-infractions --hours=72')->everyFiveMinutes()->withoutOverlapping(10);
         $schedule->command('settlement:release')->everyFiveMinutes();
         $schedule->command('schedule:heartbeat')->everyMinute();

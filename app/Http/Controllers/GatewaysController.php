@@ -11,6 +11,7 @@ use App\Models\GatewayCredential;
 use App\Models\Setting;
 use App\Services\CajuPay\CajuPayWebhookBootstrapService;
 use App\Services\Versell\VersellWebhookBootstrapService;
+use App\Services\Xflow\XflowWebhookBootstrapService;
 use App\Support\GatewayPluginRequirement;
 use App\Support\GatewayWebhookUrl;
 use App\Support\PlatformConfigContext;
@@ -129,6 +130,9 @@ class GatewaysController extends Controller
         } elseif ($slug === 'paypal') {
             $webhookUrl = GatewayWebhookUrl::forGateway('paypal');
             $webhookHelp = 'Cadastre esta URL HTTPS no PayPal Developer Dashboard (Webhooks) do mesmo app REST. Eventos: PAYMENT.CAPTURE.COMPLETED, PAYMENT.CAPTURE.DENIED, PAYMENT.CAPTURE.REFUNDED. Depois cole o Webhook ID no campo abaixo. Não altera PIX/cartão das outras adquirentes.';
+        } elseif ($slug === 'xflow') {
+            $webhookUrl = GatewayWebhookUrl::forGateway('xflow');
+            $webhookHelp = 'Cadastre esta URL HTTPS no painel Xflow (Integrações → Webhooks) ou use “Testar conexão” / salvar credenciais para registro automático. Eventos PIX: transaction.paid, transaction.refunded. Saque: withdrawal.processing/completed/failed. MED: dispute.opened/accepted/rejected (mesma URL ou …/xflow/disputes). O secret HMAC é devolvido uma única vez. Precisa ser HTTPS público. Chaves pk_test_ são sandbox (QR não pagável; saque via API não funciona em teste). Defesa de MED é no painel da Xflow > Disputas.';
         }
 
         $fileFieldsConfigured = [];
@@ -174,6 +178,7 @@ class GatewaysController extends Controller
             'methods' => $gateway['methods'] ?? [],
             'scope' => $gateway['scope'] ?? 'national',
             'signup_url' => $gateway['signup_url'] ?? null,
+            'support_contacts' => $gateway['support_contacts'] ?? [],
             'credential_keys' => $gateway['credential_keys'] ?? [],
             'certificate_key' => $gateway['certificate_key'] ?? null,
             'is_configured' => $credential !== null,
@@ -273,7 +278,7 @@ class GatewaysController extends Controller
             $credentials[$key] = is_string($v) ? trim($v) : '';
         }
 
-        foreach (['checkout_webhook_signing_secret', 'webhook_signing_secret', 'webhook_endpoint_id'] as $preserveKey) {
+        foreach (['checkout_webhook_signing_secret', 'webhook_signing_secret', 'webhook_endpoint_id', 'webhook_secret', 'payout_webhook_secret', 'payout_webhook_endpoint_id', 'dispute_webhook_secret', 'dispute_webhook_endpoint_id'] as $preserveKey) {
             if (
                 (! isset($credentials[$preserveKey]) || $credentials[$preserveKey] === '' || $credentials[$preserveKey] === null)
                 && ! empty($existingCredentials[$preserveKey])
@@ -394,6 +399,13 @@ class GatewaysController extends Controller
             }
             if ($isConnected && $slug === 'versell') {
                 $boot = app(VersellWebhookBootstrapService::class)->bootstrap($credentials);
+                if (! empty($boot['warning'])) {
+                    $webhookWarning = $boot['warning'];
+                }
+            }
+            if ($isConnected && $slug === 'xflow') {
+                $boot = app(XflowWebhookBootstrapService::class)->bootstrap($credentials);
+                $credentials = $boot['credentials'];
                 if (! empty($boot['warning'])) {
                     $webhookWarning = $boot['warning'];
                 }
@@ -610,7 +622,7 @@ class GatewaysController extends Controller
             return response()->json(['success' => false, 'message' => 'Driver do gateway não disponível.'], 422);
         }
 
-        foreach (['checkout_webhook_signing_secret', 'webhook_signing_secret', 'webhook_endpoint_id'] as $preserveKey) {
+        foreach (['checkout_webhook_signing_secret', 'webhook_signing_secret', 'webhook_endpoint_id', 'webhook_secret', 'payout_webhook_secret', 'payout_webhook_endpoint_id', 'dispute_webhook_secret', 'dispute_webhook_endpoint_id'] as $preserveKey) {
             if (
                 (! isset($credentials[$preserveKey]) || $credentials[$preserveKey] === '' || $credentials[$preserveKey] === null)
                 && ! empty($existingCredentials[$preserveKey])
@@ -649,6 +661,18 @@ class GatewaysController extends Controller
             $webhookWarning = null;
             if ($ok && $slug === 'cajupay' && $driver instanceof CajuPayDriver) {
                 $credentials = $this->ensureCajuPayWebhookRegistered($driver, $credentials, $webhookWarning);
+                if ($credential) {
+                    $credential->setEncryptedCredentials($credentials);
+                    $credential->is_connected = true;
+                    $credential->save();
+                }
+            }
+            if ($ok && $slug === 'xflow') {
+                $boot = app(XflowWebhookBootstrapService::class)->bootstrap($credentials);
+                $credentials = $boot['credentials'];
+                if (! empty($boot['warning'])) {
+                    $webhookWarning = $boot['warning'];
+                }
                 if ($credential) {
                     $credential->setEncryptedCredentials($credentials);
                     $credential->is_connected = true;

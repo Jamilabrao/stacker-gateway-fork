@@ -9,6 +9,7 @@ use App\Services\CajuPay\CajuPayMedService;
 use App\Services\Med\MedDefenseDossierService;
 use App\Services\SellerActivityLogService;
 use App\Services\Versell\VersellMedService;
+use App\Services\Xflow\XflowMedService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -23,6 +24,7 @@ class SellerMedDisputesController extends Controller
         protected CajuPayMedService $medService,
         protected VersellMedService $versellMedService,
         protected BspayMedService $bspayMedService,
+        protected XflowMedService $xflowMedService,
         protected MedDefenseDossierService $dossierService,
     ) {}
 
@@ -80,6 +82,15 @@ class SellerMedDisputesController extends Controller
                     $validated['text'],
                     $request->file('attachments', []) ?? []
                 );
+            } elseif (XflowMedService::isXflowDispute($dispute)) {
+                $this->xflowMedService->submitDefense($dispute, $validated['text']);
+                $this->logSellerActivity(SellerActivityLogService::DISPUTE_DEFENSE_SUBMITTED, $dispute, [
+                    'order_id' => $dispute->order_id,
+                    'dispute_id' => $dispute->id,
+                ]);
+
+                return redirect()->route('disputas.show', $dispute)
+                    ->with('success', 'Defesa registrada. Envie também no painel da Xflow (Disputas), dentro do prazo — a API não recebe a contestação.');
             } else {
                 $this->medService->submitDefense(
                     $dispute,
@@ -177,6 +188,7 @@ class SellerMedDisputesController extends Controller
             'opened_at' => $dispute->opened_at?->toIso8601String(),
             'resolved_at' => $dispute->resolved_at?->toIso8601String(),
             'is_open' => $dispute->isOpen(),
+            'defense_via_acquirer_panel' => XflowMedService::isXflowDispute($dispute),
             'reason' => $dispute->reason,
             'has_dossier' => $this->dossierService->isAvailable($dispute),
             'order' => $order ? [

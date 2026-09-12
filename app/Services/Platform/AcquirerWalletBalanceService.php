@@ -8,6 +8,7 @@ use App\Gateways\Efi\EfiDriver;
 use App\Gateways\GatewayRegistry;
 use App\Gateways\Stripe\StripeDriver;
 use App\Gateways\Woovi\WooviDriver;
+use App\Gateways\Xflow\XflowDriver;
 use App\Gateways\Versell\VersellCredentials;
 use App\Models\CajuPayAccount;
 use App\Models\GatewayCredential;
@@ -26,7 +27,7 @@ class AcquirerWalletBalanceService
     private const CACHE_TTL_SECONDS = 45;
 
     /** @var list<string> */
-    private const BALANCE_SLUGS = ['cajupay', 'bspay', 'efi', 'woovi', 'mercadopago', 'stripe', 'versell'];
+    private const BALANCE_SLUGS = ['cajupay', 'bspay', 'efi', 'woovi', 'mercadopago', 'stripe', 'versell', 'xflow'];
 
     /**
      * @return list<array{
@@ -269,6 +270,8 @@ class AcquirerWalletBalanceService
             'mercadopago' => trim((string) ($credentials['access_token'] ?? '')) !== '',
             'stripe' => trim((string) ($credentials['secret_key'] ?? '')) !== '',
             'versell' => VersellCredentials::isCashOutReady($credentials),
+            'xflow' => trim((string) ($credentials['public_key'] ?? '')) !== ''
+                && trim((string) ($credentials['secret_key'] ?? '')) !== '',
             default => true,
         };
     }
@@ -295,6 +298,7 @@ class AcquirerWalletBalanceService
             'mercadopago' => $this->fetchMercadoPago($credentials),
             'stripe' => $this->fetchStripe($credentials)['available'],
             'versell' => $this->fetchVersell($credentials),
+            'xflow' => $this->fetchXflow($credentials),
             default => throw new \RuntimeException('Adquirente sem consulta de saldo.'),
         };
     }
@@ -393,6 +397,16 @@ class AcquirerWalletBalanceService
         }
 
         return $this->parseVersellAvailable($body);
+    }
+
+    /**
+     * @param  array<string, mixed>  $credentials
+     */
+    private function fetchXflow(array $credentials): float
+    {
+        $payload = app(XflowDriver::class)->fetchAccountBalance($credentials);
+
+        return $this->parseXflowAvailable($payload);
     }
 
     /**
@@ -668,6 +682,26 @@ class AcquirerWalletBalanceService
         }
 
         return round((float) $amount['available'], 2);
+    }
+
+    /**
+     * GET /api/v1/balance: available/reserved em centavos.
+     *
+     * @param  array<string, mixed>  $body
+     */
+    public function parseXflowAvailable(array $body): float
+    {
+        $node = $body;
+        if (isset($body['balance']) && is_array($body['balance'])) {
+            $node = $body['balance'];
+        }
+
+        $available = $node['available'] ?? null;
+        if (! is_numeric($available)) {
+            throw new \RuntimeException('Xflow: saldo disponível não encontrado na resposta.');
+        }
+
+        return round(((float) $available) / 100, 2);
     }
 
     /**

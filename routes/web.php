@@ -148,6 +148,9 @@ Route::middleware(['throttle:60,1', \App\Http\Middleware\LogInboundGatewayWebhoo
     Route::post('/webhooks/gateways/linaopenx', [\App\Http\Controllers\Webhooks\LinaOpenxWebhookController::class, 'handle'])->name('webhooks.linaopenx');
     Route::post('/webhooks/gateways/spacepag', [\App\Http\Controllers\Webhooks\SpacepagWebhookController::class, 'handle'])->name('webhooks.spacepag');
     Route::post('/webhooks/gateways/woovi', [\App\Http\Controllers\Webhooks\WooviWebhookController::class, 'handle'])->name('webhooks.woovi');
+    Route::post('/webhooks/gateways/xflow', [\App\Http\Controllers\Webhooks\XflowWebhookController::class, 'handle'])->name('webhooks.xflow');
+    Route::post('/webhooks/gateways/xflow/payout', [\App\Http\Controllers\Webhooks\XflowWebhookController::class, 'handle'])->name('webhooks.xflow.payout');
+    Route::post('/webhooks/gateways/xflow/disputes', [\App\Http\Controllers\Webhooks\XflowWebhookController::class, 'handle'])->name('webhooks.xflow.disputes');
     Route::post('/webhooks/gateways/bspay', [\App\Http\Controllers\Webhooks\BspayWebhookController::class, 'handle'])->name('webhooks.bspay');
     Route::post('/webhooks/gateways/stripe', [\App\Http\Controllers\Webhooks\StripeWebhookController::class, 'handle'])->name('webhooks.stripe');
     Route::post('/webhooks/gateways/paypal', [\App\Http\Controllers\Webhooks\PayPalWebhookController::class, 'handle'])->name('webhooks.paypal');

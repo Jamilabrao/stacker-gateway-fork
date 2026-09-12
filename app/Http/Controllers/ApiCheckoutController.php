@@ -671,7 +671,8 @@ class ApiCheckoutController extends Controller
                         $dataInicial,
                         $dataFinal,
                         $contrato,
-                        $objeto
+                        $objeto,
+                        VersellPixRecorrenteService::periodicidadeFromInterval($plan?->interval ?? null)
                     );
                     $idRec = $rec['idRec'] ?? null;
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Platform;
 
+use App\Gateways\GatewayRegistry;
 use App\Http\Controllers\Concerns\ProvidesPlatformGatewayProps;
 use App\Http\Controllers\Concerns\RequiresPlatformStepUp;
 use App\Http\Controllers\Controller;
@@ -29,6 +30,7 @@ use App\Services\PixGoAccess;
 use App\Services\PlatformCardInstallments;
 use App\Services\MerchantWithdrawalService;
 use App\Services\MinimumChargeService;
+use App\Services\WithdrawalPixReceiptService;
 use App\Services\Payout\PayoutUserSettings;
 use App\Services\Payout\PlatformPayoutGateway;
 use App\Services\Payout\GatewayPayoutEconomics;
@@ -462,6 +464,7 @@ class FinancialController extends Controller
             'totp_code' => ['nullable', 'string', 'max:16'],
             'manual_approval_pin' => ['nullable', 'string', 'max:'.WithdrawalPolicyService::MANUAL_APPROVAL_PIN_MAX_LENGTH, 'regex:/^\d*$/'],
             'manual_confirm_external' => ['nullable', 'boolean'],
+            'payout_acquirer' => ['nullable', 'string', 'max:32'],
         ]);
         $manual = (bool) ($validated['payout_manual'] ?? false);
 
@@ -471,6 +474,16 @@ class FinancialController extends Controller
         }
 
         $this->validateWithdrawalPayoutStepUp($request, 'plataforma.saques.index');
+
+        $hadExternal = trim((string) ($withdrawal->payout_external_id ?? '')) !== '';
+        $manualAcquirer = null;
+        if ($manual && ! $hadExternal) {
+            $manualAcquirer = $this->validatedManualPayoutAcquirer($validated['payout_acquirer'] ?? null);
+            if ($manualAcquirer === null) {
+                return redirect()->route('plataforma.saques.index')
+                    ->with('error', 'Selecione a adquirente usada no PIX ou a opção pagamento por conta externa.');
+            }
+        }
 
         if (! $manual && trim((string) ($withdrawal->payout_external_id ?? '')) !== '') {
             return redirect()->route('plataforma.saques.index')
@@ -489,7 +502,6 @@ class FinancialController extends Controller
             $meta = is_array($withdrawal->payout_meta) ? $withdrawal->payout_meta : [];
             $meta['manual_confirmed_by'] = $request->user()?->id;
             $meta['manual_confirmed_at'] = now()->toIso8601String();
-            $hadExternal = trim((string) ($withdrawal->payout_external_id ?? '')) !== '';
             if ($hadExternal) {
                 $meta['manual_confirmed_while_awaiting_gateway'] = true;
             }
@@ -497,9 +509,12 @@ class FinancialController extends Controller
                 'payout_manual' => true,
                 'payout_meta' => $meta,
             ];
-            // Sem envio prévio ao gateway: marca provedor como manual. Se já há external_id, preserva cajupay/etc.
-            if (! $hadExternal) {
-                $update['payout_provider'] = 'manual';
+            // Sem envio prévio ao gateway: grava a adquirente (ou conta externa) para o comprovante.
+            // Se já há external_id, preserva cajupay/etc.
+            if (! $hadExternal && is_string($manualAcquirer) && $manualAcquirer !== '') {
+                $meta['manual_payout_acquirer'] = $manualAcquirer;
+                $update['payout_meta'] = $meta;
+                $update['payout_provider'] = $manualAcquirer;
             }
             $withdrawal->update($update);
             MerchantWithdrawalService::markPaid($withdrawal->fresh());
@@ -508,6 +523,7 @@ class FinancialController extends Controller
                 'withdrawal_id' => $withdrawal->id,
                 'manual' => true,
                 'awaiting_gateway' => $hadExternal,
+                'payout_acquirer' => $manualAcquirer,
             ], $request);
 
             return redirect()->route('plataforma.saques.index')
@@ -975,5 +991,18 @@ class FinancialController extends Controller
     private function notifyWithdrawalPayoutError(Withdrawal $withdrawal, string $reason): void
     {
         app(PlatformEmailNotifications::class)->withdrawalPayoutError($withdrawal->fresh(), $reason);
+    }
+
+    private function validatedManualPayoutAcquirer(mixed $raw): ?string
+    {
+        $slug = strtolower(trim((string) $raw));
+        if ($slug === WithdrawalPixReceiptService::MANUAL_PAYOUT_EXTERNAL) {
+            return $slug;
+        }
+        if ($slug !== '' && GatewayRegistry::isAllowedAcquirer($slug) && GatewayRegistry::get($slug) !== null) {
+            return $slug;
+        }
+
+        return null;
     }
 }

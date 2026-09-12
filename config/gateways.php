@@ -18,6 +18,18 @@ return [
             'country_name' => 'Brasil',
             'country_flag' => 'brasil.png',
             'signup_url' => 'https://cajupay.com.br',
+            'support_contacts' => [
+                [
+                    'name' => '55 11 93621-2771',
+                    'role' => 'Suporte',
+                    'whatsapp' => '5511936212771',
+                ],
+                [
+                    'name' => '55 71 92750-7071',
+                    'role' => 'Gerente de contas',
+                    'whatsapp' => '5571927507071',
+                ],
+            ],
             'driver' => \App\Gateways\CajuPay\CajuPayDriver::class,
             'credential_keys' => [
                 ['key' => 'public_key', 'label' => 'Chave pública', 'type' => 'text'],

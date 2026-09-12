@@ -395,28 +395,42 @@ class CheckoutController extends Controller
         $sessionToken = Str::uuid()->toString();
         $checkoutSession = null;
         if (! $isBuilderPreview) {
-            $checkoutSession = CheckoutSession::create(
-                CheckoutSession::filterAttributesForExistingColumns(array_merge([
-                    'tenant_id' => $product->tenant_id,
-                    'product_id' => $product->id,
-                    'product_offer_id' => $resolved['offer']?->id,
-                    'subscription_plan_id' => $resolved['plan']?->id,
-                    'checkout_slug' => $resolved['checkout_slug'],
-                    'session_token' => $sessionToken,
-                    'step' => CheckoutSession::STEP_VISIT,
-                    'customer_ip' => $request->ip(),
-                    'affiliate_ref' => $affiliateRef !== '' ? $affiliateRef : null,
-                ], CheckoutSession::trackingFromQuery($request), CheckoutSession::metaAttributionFromQuery($request)))
-            );
-
-            app(MetaTrackingService::class)->queueCheckoutLandingEvents(
-                $checkoutSession,
+            $reusedCheckoutSession = false;
+            $existingCheckoutSession = $this->findReusableCheckoutSession(
+                $request,
                 $product,
-                $payload['conversion_pixels'],
-                (float) $resolved['amount'],
-                (string) ($resolved['currency'] ?? 'BRL'),
-                $request->fullUrl(),
+                (string) $resolved['checkout_slug']
             );
+            if ($existingCheckoutSession) {
+                $checkoutSession = $existingCheckoutSession;
+                $sessionToken = $existingCheckoutSession->session_token;
+                $reusedCheckoutSession = true;
+            } else {
+                $checkoutSession = CheckoutSession::create(
+                    CheckoutSession::filterAttributesForExistingColumns(array_merge([
+                        'tenant_id' => $product->tenant_id,
+                        'product_id' => $product->id,
+                        'product_offer_id' => $resolved['offer']?->id,
+                        'subscription_plan_id' => $resolved['plan']?->id,
+                        'checkout_slug' => $resolved['checkout_slug'],
+                        'session_token' => $sessionToken,
+                        'step' => CheckoutSession::STEP_VISIT,
+                        'customer_ip' => $request->ip(),
+                        'affiliate_ref' => $affiliateRef !== '' ? $affiliateRef : null,
+                    ], CheckoutSession::trackingFromQuery($request), CheckoutSession::metaAttributionFromQuery($request)))
+                );
+            }
+
+            if (! $reusedCheckoutSession) {
+                app(MetaTrackingService::class)->queueCheckoutLandingEvents(
+                    $checkoutSession,
+                    $product,
+                    $payload['conversion_pixels'],
+                    (float) $resolved['amount'],
+                    (string) ($resolved['currency'] ?? 'BRL'),
+                    $request->fullUrl(),
+                );
+            }
 
             // Tracking interno (falha isolada — não impacta checkout / UTMify / Meta).
             try {
@@ -433,10 +447,14 @@ class CheckoutController extends Controller
                 ]);
                 if (is_string($metricsKey) && $metricsKey !== '') {
                     if (\Illuminate\Support\Facades\Schema::hasColumn('checkout_sessions', 'metrics_session_key')) {
-                        $checkoutSession->metrics_session_key = $metricsKey;
-                        $checkoutSession->save();
+                        if ($checkoutSession->metrics_session_key !== $metricsKey) {
+                            $checkoutSession->metrics_session_key = $metricsKey;
+                            $checkoutSession->save();
+                        }
                     }
                     $payload['metrics_session_key'] = $metricsKey;
+                } elseif ($reusedCheckoutSession && is_string($checkoutSession->metrics_session_key) && $checkoutSession->metrics_session_key !== '') {
+                    $payload['metrics_session_key'] = $checkoutSession->metrics_session_key;
                 }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('metrics.checkout_view_failed', [
@@ -3649,6 +3667,36 @@ class CheckoutController extends Controller
         }
 
         return Str::isUuid($candidate) ? $candidate : null;
+    }
+
+    /**
+     * Recarregar o checkout não deve criar token/view novos enquanto a sessão métrica estiver viva.
+     */
+    private function findReusableCheckoutSession(Request $request, Product $product, string $checkoutSlug): ?CheckoutSession
+    {
+        if (! Schema::hasColumn('checkout_sessions', 'metrics_session_key')) {
+            return null;
+        }
+
+        $sessionKey = $this->resolveValidMetricsSessionKey(
+            $request->cookie((string) config('metrics_tracking.cookie_session', 'gf_msid'))
+        );
+        if ($sessionKey === null) {
+            return null;
+        }
+
+        $minutes = max(5, (int) config('metrics_tracking.checkout_session_reuse_minutes', 30));
+
+        return CheckoutSession::query()
+            ->where('product_id', $product->id)
+            ->where('tenant_id', $product->tenant_id)
+            ->where('checkout_slug', $checkoutSlug)
+            ->where('metrics_session_key', $sessionKey)
+            ->whereNull('order_id')
+            ->where('step', '!=', CheckoutSession::STEP_CONVERTED)
+            ->where('created_at', '>=', now()->subMinutes($minutes))
+            ->orderByDesc('id')
+            ->first();
     }
 
     /**

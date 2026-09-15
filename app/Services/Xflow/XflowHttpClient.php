@@ -75,6 +75,20 @@ class XflowHttpClient
         return $response;
     }
 
+    public function errorCode(Response $response): ?string
+    {
+        $json = $response->json();
+        if (! is_array($json)) {
+            return null;
+        }
+        $code = $json['error'] ?? null;
+        if (! is_string($code) || trim($code) === '') {
+            return null;
+        }
+
+        return strtolower(trim($code));
+    }
+
     public function errorMessage(Response $response): string
     {
         $json = $response->json();

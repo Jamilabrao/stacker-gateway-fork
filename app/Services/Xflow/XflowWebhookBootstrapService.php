@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 class XflowWebhookBootstrapService
 {
     /** @var list<string> */
-    public const PIX_EVENTS = ['transaction.paid', 'transaction.refunded'];
+    public const PIX_EVENTS = ['transaction.paid', 'transaction.refunded', 'transaction.refund_failed'];
 
     /** @var list<string> */
     public const PAYOUT_EVENTS = ['withdrawal.processing', 'withdrawal.completed', 'withdrawal.failed'];

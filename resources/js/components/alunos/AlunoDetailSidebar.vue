@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue';
-import { X, Pencil, Trash2, Package, Loader2 } from 'lucide-vue-next';
+import { X, Pencil, Trash2, Package, Loader2, ClipboardList, ArrowLeft, Download, FileText } from 'lucide-vue-next';
 import axios from 'axios';
 import Button from '@/components/ui/Button.vue';
 import Checkbox from '@/components/ui/Checkbox.vue';
@@ -24,6 +24,9 @@ const form = ref({
 const removingProductId = ref(null);
 const deleting = ref(false);
 const toast = ref({ message: null, type: null });
+const dossier = ref(null);
+const dossierLoading = ref(false);
+const dossierError = ref('');
 
 watch(
     () => props.aluno,
@@ -37,15 +40,20 @@ watch(
             };
         }
         editing.value = false;
+        dossier.value = null;
+        dossierError.value = '';
     },
     { immediate: true }
 );
 
 function close() {
+    dossier.value = null;
+    dossierError.value = '';
     emit('close');
 }
 
 function startEdit() {
+    dossier.value = null;
     editing.value = true;
 }
 
@@ -134,6 +142,55 @@ function showToast(message, type) {
         toast.value = { message: null, type: null };
     }, 4000);
 }
+
+async function openDossier(produto) {
+    if (!props.aluno || !produto?.id) return;
+    dossierLoading.value = true;
+    dossierError.value = '';
+    dossier.value = null;
+    try {
+        const { data } = await axios.get(`/produtos/alunos/${props.aluno.id}/produtos/${produto.id}/dossie`);
+        dossier.value = data;
+    } catch (err) {
+        dossier.value = null;
+        dossierError.value = err.response?.data?.message ?? 'Não foi possível carregar o dossiê.';
+        showToast(dossierError.value, 'error');
+    } finally {
+        dossierLoading.value = false;
+    }
+}
+
+function closeDossier() {
+    dossier.value = null;
+    dossierError.value = '';
+}
+
+function formatDossierDate(iso) {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+        });
+    } catch (_) {
+        return iso;
+    }
+}
+
+function formatMoney(amount) {
+    if (amount === null || amount === undefined) return '—';
+    return Number(amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function dossierExportUrl(format) {
+    if (!props.aluno?.id || !dossier.value?.product?.id) return '#';
+    const base = `/produtos/alunos/${props.aluno.id}/produtos/${dossier.value.product.id}/dossie/exportar`;
+    return format === 'pdf' ? `${base}.pdf` : base;
+}
 </script>
 
 <template>
@@ -154,7 +211,7 @@ function showToast(message, type) {
             >
                 <div class="flex items-center justify-between rounded-tl-2xl px-5 py-5">
                     <h2 class="text-lg font-semibold text-zinc-900 dark:text-white">
-                        {{ editing ? 'Editar aluno' : 'Detalhes do aluno' }}
+                        {{ dossier ? 'Dossiê do aluno' : (editing ? 'Editar aluno' : 'Detalhes do aluno') }}
                     </h2>
                     <button
                         type="button"
@@ -172,7 +229,92 @@ function showToast(message, type) {
 
                 <div v-else class="flex flex-1 flex-col overflow-hidden">
                     <div class="flex-1 overflow-y-auto p-5">
-                        <div v-if="!editing" class="space-y-5">
+                        <div v-if="dossier || dossierLoading" class="space-y-5">
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                                @click="closeDossier"
+                            >
+                                <ArrowLeft class="h-3.5 w-3.5" />
+                                Voltar aos detalhes
+                            </button>
+                            <div v-if="dossierLoading" class="flex items-center gap-2 text-sm text-zinc-500">
+                                <Loader2 class="h-4 w-4 animate-spin" />
+                                Carregando dossiê...
+                            </div>
+                            <template v-else-if="dossier">
+                                <div class="space-y-1">
+                                    <p class="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Produto</p>
+                                    <p class="text-sm font-medium text-zinc-900 dark:text-white">{{ dossier.product?.name }}</p>
+                                </div>
+                                <div class="grid grid-cols-1 gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-700 dark:bg-zinc-800/50">
+                                    <div>
+                                        <p class="font-medium uppercase tracking-wide text-zinc-500">Acesso concedido</p>
+                                        <p class="mt-0.5 text-zinc-900 dark:text-white">{{ formatDossierDate(dossier.enrolled_at) }}</p>
+                                    </div>
+                                    <div v-if="dossier.order">
+                                        <p class="font-medium uppercase tracking-wide text-zinc-500">Compra</p>
+                                        <p class="mt-0.5 text-zinc-900 dark:text-white">
+                                            {{ formatMoney(dossier.order.amount) }}
+                                            · {{ formatDossierDate(dossier.order.paid_at) }}
+                                        </p>
+                                    </div>
+                                    <div v-if="dossier.progress?.percent !== null && dossier.progress?.percent !== undefined">
+                                        <p class="font-medium uppercase tracking-wide text-zinc-500">Progresso</p>
+                                        <p class="mt-0.5 text-zinc-900 dark:text-white">
+                                            {{ dossier.progress.completed }} / {{ dossier.progress.total }} aulas
+                                            ({{ dossier.progress.percent }}%)
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <Button
+                                        as="a"
+                                        variant="outline"
+                                        class="flex-1 justify-center"
+                                        :href="dossierExportUrl('csv')"
+                                        download
+                                    >
+                                        <Download class="h-4 w-4" />
+                                        CSV
+                                    </Button>
+                                    <Button
+                                        as="a"
+                                        variant="outline"
+                                        class="flex-1 justify-center"
+                                        :href="dossierExportUrl('pdf')"
+                                        download
+                                    >
+                                        <FileText class="h-4 w-4" />
+                                        PDF
+                                    </Button>
+                                </div>
+                                <div class="space-y-2">
+                                    <p class="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Linha do tempo</p>
+                                    <p
+                                        v-if="!dossier.events?.length"
+                                        class="text-sm text-zinc-500"
+                                    >
+                                        Nenhum acesso, aula ou download registrado ainda. Eventos passam a aparecer depois que o aluno entra na área de membros.
+                                    </p>
+                                    <ol v-else class="space-y-2">
+                                        <li
+                                            v-for="(ev, i) in dossier.events"
+                                            :key="`${ev.event}-${ev.occurred_at}-${i}`"
+                                            class="rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700"
+                                        >
+                                            <p class="text-sm text-zinc-900 dark:text-white">{{ ev.label }}</p>
+                                            <p class="mt-0.5 text-xs text-zinc-500">
+                                                {{ formatDossierDate(ev.occurred_at) }}
+                                                <span v-if="ev.ip"> · IP {{ ev.ip }}</span>
+                                                <span v-else> · IP —</span>
+                                            </p>
+                                        </li>
+                                    </ol>
+                                </div>
+                            </template>
+                        </div>
+                        <div v-else-if="!editing" class="space-y-5">
                             <div class="space-y-1">
                                 <p class="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                                     Nome
@@ -192,15 +334,20 @@ function showToast(message, type) {
                                 <div
                                     v-for="p in (aluno.products ?? [])"
                                     :key="p.id"
-                                    class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-3 pr-2 dark:border-zinc-700 dark:bg-zinc-800/50"
+                                    class="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-3 pr-2 dark:border-zinc-700 dark:bg-zinc-800/50"
                                 >
-                                    <span class="flex items-center gap-2 text-sm text-zinc-900 dark:text-white">
-                                        <Package class="h-4 w-4 text-zinc-500" />
-                                        {{ p.name }}
-                                    </span>
                                     <button
                                         type="button"
-                                        class="rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                                        class="flex min-w-0 flex-1 items-center gap-2 text-left text-sm text-zinc-900 hover:underline dark:text-white"
+                                        @click="openDossier(p)"
+                                    >
+                                        <Package class="h-4 w-4 shrink-0 text-zinc-500" />
+                                        <span class="truncate">{{ p.name }}</span>
+                                        <ClipboardList class="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                                         :disabled="removingProductId === p.id"
                                         @click="removeProduct(p.id)"
                                     >

@@ -9,8 +9,10 @@ use App\Models\Order;
 use App\Models\Withdrawal;
 use App\Models\MedDispute;
 use App\Services\MerchantWithdrawalService;
+use App\Services\PlatformOrderAdminService;
 use App\Services\Xflow\XflowMedService;
 use App\Support\GatewayInboundWebhookAuth;
+use App\Support\GatewayPaymentCredentials;
 use App\Support\PaymentWebhookDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -63,6 +65,10 @@ class XflowWebhookController extends Controller
             return response()->json(['received' => true, 'ignored' => true]);
         }
 
+        if ($event === 'transaction.refund_failed') {
+            return $this->handleRefundFailed($order, $data);
+        }
+
         $mapped = $this->mapEvent($event, $data['status'] ?? null);
         if ($mapped === null) {
             return response()->json(['received' => true, 'ignored' => true]);
@@ -71,6 +77,80 @@ class XflowWebhookController extends Controller
         PaymentWebhookDispatcher::dispatch('xflow', $transactionId, $mapped['event'], $mapped['status'], $payload);
 
         return response()->json(['received' => true]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function handleRefundFailed(Order $order, array $data): JsonResponse
+    {
+        $failureReason = $this->refundFailureReason($data);
+        $patch = [
+            'xflow_refund_status' => 'failed',
+            'xflow_refund_pending' => false,
+            'xflow_refund_failure_reason' => $failureReason,
+        ];
+
+        $remote = $this->remoteRefundStatus($order);
+        if ($remote === 'completed') {
+            Log::info('XflowWebhook: refund_failed ignorado; cobrança já está estornada', [
+                'order_id' => $order->id,
+                'gateway_id' => $order->gateway_id,
+            ]);
+            PlatformOrderAdminService::applyGatewayRefund($order);
+
+            return response()->json(['received' => true]);
+        }
+
+        if ($remote === 'pending') {
+            Log::info('XflowWebhook: refund_failed com estorno ainda pending na API', [
+                'order_id' => $order->id,
+                'gateway_id' => $order->gateway_id,
+            ]);
+
+            return response()->json(['received' => true, 'ignored' => true]);
+        }
+
+        Log::warning('XflowWebhook: estorno recusado pelo PSP', [
+            'order_id' => $order->id,
+            'gateway_id' => $order->gateway_id,
+            'status' => $order->status,
+            'reason' => $failureReason,
+        ]);
+
+        PlatformOrderAdminService::abortPendingGatewayRefund($order, $patch);
+
+        return response()->json(['received' => true]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function refundFailureReason(array $data): ?string
+    {
+        $refund = is_array($data['refund'] ?? null) ? $data['refund'] : [];
+        $reason = $refund['failureReason'] ?? $data['failureReason'] ?? $data['failure_reason'] ?? null;
+
+        if (! is_string($reason) || trim($reason) === '') {
+            return null;
+        }
+
+        return mb_substr(trim($reason), 0, 280);
+    }
+
+    private function remoteRefundStatus(Order $order): ?string
+    {
+        $chargeId = is_string($order->gateway_id) ? trim($order->gateway_id) : '';
+        if ($chargeId === '') {
+            return null;
+        }
+
+        $credentials = GatewayPaymentCredentials::resolve((int) $order->tenant_id, 'xflow', $order);
+        if ($credentials === null) {
+            return null;
+        }
+
+        return (new XflowDriver)->getRefundStatus($chargeId, $credentials);
     }
 
     /**

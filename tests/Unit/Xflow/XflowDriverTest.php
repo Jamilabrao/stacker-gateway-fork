@@ -144,6 +144,79 @@ class XflowDriverTest extends TestCase
         $this->assertSame('pending', $driver->getTransactionStatus('clx_block', $this->credentials()));
     }
 
+    public function test_refund_posts_to_charge_and_maps_pending(): void
+    {
+        Http::fake([
+            'app.xflowpayments.com/api/v1/charges/clx_1/refund' => Http::response([
+                'id' => 'rf_1',
+                'chargeId' => 'clx_1',
+                'livemode' => true,
+                'status' => 'pending',
+                'amountCents' => 1990,
+                'reason' => 'Estorno pedido #42',
+            ], 202),
+        ]);
+
+        $result = (new XflowDriver)->refundTransaction($this->credentials(), 'clx_1', 19.90, '42');
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['pending'] ?? false);
+        $this->assertSame('rf_1', $result['refund_id'] ?? null);
+
+        Http::assertSent(function ($request) {
+            if ($request->url() !== 'https://app.xflowpayments.com/api/v1/charges/clx_1/refund' || $request->method() !== 'POST') {
+                return false;
+            }
+            $body = $request->data();
+
+            return ($body['reason'] ?? null) === 'Estorno pedido #42'
+                && $request->header('Idempotency-Key')[0] === 'refund-order-42';
+        });
+    }
+
+    public function test_refund_maps_completed_and_window_expired(): void
+    {
+        Http::fake([
+            'app.xflowpayments.com/api/v1/charges/clx_ok/refund' => Http::response([
+                'id' => 'rf_ok',
+                'chargeId' => 'clx_ok',
+                'status' => 'completed',
+                'amountCents' => 1000,
+            ], 200),
+            'app.xflowpayments.com/api/v1/charges/clx_old/refund' => Http::response([
+                'error' => 'refund_window_expired',
+                'message' => 'Refund window expired',
+            ], 422),
+        ]);
+
+        $driver = new XflowDriver;
+        $ok = $driver->refundTransaction($this->credentials(), 'clx_ok', 10, '7');
+        $this->assertTrue($ok['success']);
+        $this->assertFalse($ok['pending'] ?? true);
+
+        $expired = $driver->refundTransaction($this->credentials(), 'clx_old', 10, '8');
+        $this->assertFalse($expired['success']);
+        $this->assertSame('refund_window_expired', $expired['error_code'] ?? null);
+        $this->assertStringContainsString('90 dias', $expired['message'] ?? '');
+    }
+
+    public function test_get_refund_status_reads_charge_refund(): void
+    {
+        Http::fake([
+            'app.xflowpayments.com/api/v1/charges/clx_rf' => Http::response([
+                'id' => 'clx_rf',
+                'status' => 'paid',
+                'refund' => [
+                    'id' => 'rf_1',
+                    'status' => 'failed',
+                    'failureReason' => 'PSP recusou',
+                ],
+            ], 200),
+        ]);
+
+        $this->assertSame('failed', (new XflowDriver)->getRefundStatus('clx_rf', $this->credentials()));
+    }
+
     public function test_fetch_account_balance_returns_cents_payload(): void
     {
         Http::fake([
@@ -243,6 +316,8 @@ class XflowDriverTest extends TestCase
             $events = $body['events'] ?? [];
 
             return in_array('transaction.paid', $events, true)
+                && in_array('transaction.refunded', $events, true)
+                && in_array('transaction.refund_failed', $events, true)
                 && in_array('withdrawal.completed', $events, true)
                 && in_array('dispute.opened', $events, true);
         });

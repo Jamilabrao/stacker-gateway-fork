@@ -228,6 +228,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command($logsPrune)->everySixHours();
         $schedule->command('queue:prune-failed --hours=168')->dailyAt('04:00');
         $schedule->command('inbound-webhooks:prune --days=14')->dailyAt('04:15');
+        $schedule->command('model:prune', [
+            '--model' => [\App\Models\MemberStudentActivityLog::class],
+        ])->dailyAt('04:20');
         $schedule->job(new \App\Jobs\QueueHeartbeatJob)->everyMinute();
     })
     ->create();

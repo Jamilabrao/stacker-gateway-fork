@@ -1807,6 +1807,11 @@ class CheckoutController extends Controller
                         $json['requires_action'] = true;
                         $json['client_secret'] = $cardResult['client_secret'];
                     }
+                    if ($status === 'requires_action' && ! empty($cardResult['redirect_url'])) {
+                        $json['success'] = true;
+                        $json['requires_action'] = true;
+                        $json['redirect_url'] = $cardResult['redirect_url'];
+                    }
 
                     return $this->idempotencyReturn($idempotencyKey, response()->json($json, $isApproved || $status === 'requires_action' ? 200 : 202));
                 }
@@ -1822,6 +1827,9 @@ class CheckoutController extends Controller
                     }
 
                     return $this->idempotencyReturn($idempotencyKey, redirect()->to($redirectUrl)->with('success', 'Compra concluída.'));
+                }
+                if ($status === 'requires_action' && ! empty($cardResult['redirect_url']) && is_string($cardResult['redirect_url'])) {
+                    return $this->idempotencyReturn($idempotencyKey, redirect()->away($cardResult['redirect_url']));
                 }
                 if ($checkoutSlug !== '') {
                     return $this->idempotencyReturn($idempotencyKey, redirect()->route('checkout.show', ['slug' => $checkoutSlug])->with('success', 'Pagamento com cartão recebido. Você receberá a confirmação por e-mail.'));

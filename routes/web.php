@@ -634,6 +634,12 @@ Route::prefix('plataforma')->name('plataforma.')->group(function () {
             ->name('clientes.export')
             ->middleware('throttle:10,1');
         Route::get('/clientes/{user}', [\App\Http\Controllers\Platform\CustomersController::class, 'show'])->name('clientes.show');
+        Route::get('/clientes/{user}/produtos/{produto}/dossie', [\App\Http\Controllers\Platform\CustomersController::class, 'dossier'])
+            ->name('clientes.acessos.dossie');
+        Route::get('/clientes/{user}/produtos/{produto}/dossie/exportar', [\App\Http\Controllers\Platform\CustomersController::class, 'exportDossier'])
+            ->name('clientes.acessos.dossie.export');
+        Route::get('/clientes/{user}/produtos/{produto}/dossie/exportar.pdf', [\App\Http\Controllers\Platform\CustomersController::class, 'exportDossierPdf'])
+            ->name('clientes.acessos.dossie.export-pdf');
         Route::delete('/clientes/{user}', [\App\Http\Controllers\Platform\CustomersController::class, 'destroy'])
             ->name('clientes.destroy')
             ->middleware('throttle:30,1');

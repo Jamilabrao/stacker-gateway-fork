@@ -9,6 +9,7 @@ use App\Gateways\GatewayRegistry;
 use App\Gateways\Stripe\StripeDriver;
 use App\Gateways\Woovi\WooviDriver;
 use App\Gateways\Xflow\XflowDriver;
+use App\Gateways\Okto\OktoDriver;
 use App\Gateways\Versell\VersellCredentials;
 use App\Models\CajuPayAccount;
 use App\Models\GatewayCredential;
@@ -27,7 +28,7 @@ class AcquirerWalletBalanceService
     private const CACHE_TTL_SECONDS = 45;
 
     /** @var list<string> */
-    private const BALANCE_SLUGS = ['cajupay', 'bspay', 'efi', 'woovi', 'mercadopago', 'stripe', 'versell', 'xflow'];
+    private const BALANCE_SLUGS = ['cajupay', 'bspay', 'efi', 'woovi', 'mercadopago', 'stripe', 'versell', 'xflow', 'okto'];
 
     /**
      * @return list<array{
@@ -272,6 +273,7 @@ class AcquirerWalletBalanceService
             'versell' => VersellCredentials::isCashOutReady($credentials),
             'xflow' => trim((string) ($credentials['public_key'] ?? '')) !== ''
                 && trim((string) ($credentials['secret_key'] ?? '')) !== '',
+            'okto' => trim((string) ($credentials['access_token'] ?? '')) !== '',
             default => true,
         };
     }
@@ -299,6 +301,7 @@ class AcquirerWalletBalanceService
             'stripe' => $this->fetchStripe($credentials)['available'],
             'versell' => $this->fetchVersell($credentials),
             'xflow' => $this->fetchXflow($credentials),
+            'okto' => $this->fetchOkto($credentials),
             default => throw new \RuntimeException('Adquirente sem consulta de saldo.'),
         };
     }
@@ -407,6 +410,16 @@ class AcquirerWalletBalanceService
         $payload = app(XflowDriver::class)->fetchAccountBalance($credentials);
 
         return $this->parseXflowAvailable($payload);
+    }
+
+    /**
+     * @param  array<string, mixed>  $credentials
+     */
+    private function fetchOkto(array $credentials): float
+    {
+        $payload = app(OktoDriver::class)->fetchAccountBalance($credentials);
+
+        return $this->parseOktoAvailable($payload);
     }
 
     /**
@@ -702,6 +715,21 @@ class AcquirerWalletBalanceService
         }
 
         return round(((float) $available) / 100, 2);
+    }
+
+    /**
+     * GET /operator/v2/balance: availableBalance já em reais.
+     *
+     * @param  array<string, mixed>  $body
+     */
+    public function parseOktoAvailable(array $body): float
+    {
+        $available = $body['availableBalance'] ?? $body['available'] ?? null;
+        if (! is_numeric($available)) {
+            throw new \RuntimeException('Okto: saldo disponível não encontrado na resposta.');
+        }
+
+        return round((float) $available, 2);
     }
 
     /**

@@ -36,6 +36,7 @@ final class GatewayApiCredentials
                 && trim((string) ($credentials['merchant_key'] ?? '')) !== '',
             'xflow' => trim((string) ($credentials['public_key'] ?? '')) !== ''
                 && trim((string) ($credentials['secret_key'] ?? '')) !== '',
+            'okto' => trim((string) ($credentials['access_token'] ?? '')) !== '',
             default => true,
         };
     }

@@ -384,6 +384,34 @@ return [
                 ['key' => 'xflow_admin_fee_payout_brl', 'label' => 'Taxa de saque paga à Xflow (R$)', 'type' => 'text', 'optional' => true],
             ],
         ],
+        'okto' => [
+            'slug' => 'okto',
+            'name' => 'Okto',
+            'image' => 'images/gateways/okto_payments.svg',
+            'methods' => ['pix'],
+            'scope' => 'national',
+            'country' => 'br',
+            'country_name' => 'Brasil',
+            'country_flag' => 'brasil.png',
+            'signup_url' => 'https://www.oktopayments.com/pt/home-portugues/',
+            'support_contacts' => [
+                [
+                    'name' => 'Mauricio',
+                    'role' => 'Gerente de contas',
+                    'whatsapp' => '5511970790960',
+                ],
+            ],
+            'driver' => \App\Gateways\Okto\OktoDriver::class,
+            'credential_keys' => [
+                ['key' => 'access_token', 'label' => 'Access token (Bearer)', 'type' => 'password'],
+                ['key' => 'rsa_public_key', 'label' => 'Chave pública RSA (PEM) para X-Payload-Signature', 'type' => 'textarea'],
+                ['key' => 'notification_token', 'label' => 'Token do webhook (Gaming-Operator-Token — opcional, default = access token)', 'type' => 'password', 'optional' => true],
+                ['key' => 'sandbox', 'label' => 'Usar staging (demo-pix.oktopay.eu)', 'type' => 'boolean'],
+                ['key' => 'okto_payout_min_brl', 'label' => 'Mínimo líquido de payout (R$)', 'type' => 'text', 'optional' => true],
+                ['key' => 'okto_admin_fee_pix_brl', 'label' => 'Taxa PIX paga à Okto (R$)', 'type' => 'text', 'optional' => true],
+                ['key' => 'okto_admin_fee_payout_brl', 'label' => 'Taxa de saque paga à Okto (R$)', 'type' => 'text', 'optional' => true],
+            ],
+        ],
     ],
 
     /*
@@ -418,6 +446,7 @@ return [
         'versell', // Cash In + Cash Out (dict)
         'cielo',
         'xflow',
+        'okto',
     ],
 
     /*
@@ -426,7 +455,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'default_order' => [
-        'pix' => ['cajupay', /* 'spacepag', */ 'woovi', 'bspay', 'onlyup', 'efi', 'mercadopago', 'pagarme', 'pushinpay', 'asaas', 'versell', 'cielo', 'xflow'],
+        'pix' => ['cajupay', /* 'spacepag', */ 'woovi', 'bspay', 'onlyup', 'efi', 'mercadopago', 'pagarme', 'pushinpay', 'asaas', 'versell', 'cielo', 'xflow', 'okto'],
         'card' => ['cajupay', 'efi', 'stripe', 'mercadopago', 'pagarme', 'asaas', 'cielo'],
         'boleto' => ['efi', 'mercadopago', 'pagarme', 'asaas'],
         'pix_auto' => ['efi', 'pushinpay', 'versell'],

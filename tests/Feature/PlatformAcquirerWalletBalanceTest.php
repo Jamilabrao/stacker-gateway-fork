@@ -67,7 +67,7 @@ class PlatformAcquirerWalletBalanceTest extends TestCase
 
         $rows = app(AcquirerWalletBalanceService::class)->list();
         $this->assertSame(
-            ['cajupay', 'bspay', 'efi', 'woovi', 'mercadopago', 'stripe', 'versell', 'xflow'],
+            ['cajupay', 'bspay', 'efi', 'woovi', 'mercadopago', 'stripe', 'versell', 'xflow', 'okto'],
             collect($rows)->pluck('slug')->all()
         );
         $this->assertTrue(collect($rows)->every(fn (array $row) => $row['status'] === 'inactive'));
@@ -450,6 +450,11 @@ class PlatformAcquirerWalletBalanceTest extends TestCase
         ]));
         $this->assertSame(50.0, $service->parseXflowAvailable([
             'balance' => ['available' => 5000, 'reserved' => 0, 'currency' => 'BRL'],
+        ]));
+        $this->assertSame(29800.0, $service->parseOktoAvailable([
+            'availableBalance' => 29800.00,
+            'totalBalance' => 30000.00,
+            'pendingBalance' => -200.00,
         ]));
     }
 

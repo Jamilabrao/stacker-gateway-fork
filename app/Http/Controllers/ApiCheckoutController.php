@@ -832,6 +832,10 @@ class ApiCheckoutController extends Controller
 
                     return redirect()->route('api-checkout.card-confirm');
                 }
+                $asaasChallenge = $result['redirect_url'] ?? null;
+                if (($result['status'] ?? null) === 'requires_action' && is_string($asaasChallenge) && $asaasChallenge !== '') {
+                    return redirect()->away($asaasChallenge);
+                }
                 if ($order->fresh()->status === 'completed') {
                     return redirect()
                         ->route('api-checkout.thank-you', ['order_id' => $order->id])

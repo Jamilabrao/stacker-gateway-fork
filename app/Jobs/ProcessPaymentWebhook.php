@@ -98,13 +98,21 @@ class ProcessPaymentWebhook implements ShouldQueue
             || ($this->gatewaySlug === 'cajupay' && in_array($this->event, ['checkout.payment.disputed', 'card.payment.disputed'], true));
         if ($isDisputeEvent && in_array($this->status, ['disputed', 'chargeback'], true)) {
             if (in_array($order->status, ['completed', 'pending'], true)) {
-                try {
-                    app(\App\Services\CajuPay\CajuPayMedService::class)->syncOpenedFromCheckoutDispute($order, [
-                        'gateway_event' => $this->event,
-                        'status' => $this->status,
-                    ]);
-                } catch (\InvalidArgumentException) {
-                    //
+                if ($this->gatewaySlug === 'cajupay') {
+                    try {
+                        app(\App\Services\CajuPay\CajuPayMedService::class)->syncOpenedFromCheckoutDispute($order, [
+                            'gateway_event' => $this->event,
+                            'status' => $this->status,
+                        ]);
+                    } catch (\InvalidArgumentException) {
+                        //
+                    }
+                } else {
+                    try {
+                        PlatformOrderAdminService::markDisputed($order);
+                    } catch (\InvalidArgumentException) {
+                        //
+                    }
                 }
             }
 

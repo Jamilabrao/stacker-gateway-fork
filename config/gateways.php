@@ -242,6 +242,7 @@ return [
             'driver' => \App\Gateways\Asaas\AsaasDriver::class,
             'credential_keys' => [
                 ['key' => 'api_key', 'label' => 'API Key', 'type' => 'password'],
+                ['key' => 'webhook_secret', 'label' => 'Token de autenticação do webhook (authToken do painel Asaas)', 'type' => 'password'],
                 ['key' => 'sandbox', 'label' => 'Usar ambiente de homologação (sandbox)', 'type' => 'boolean'],
             ],
         ],
@@ -440,6 +441,7 @@ return [
         'onlyup',
         'mercadopago',
         'pagarme',
+        'asaas',
         'stripe',
         'paypal',
         'linaopenx',

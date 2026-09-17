@@ -2136,6 +2136,10 @@ function submit() {
                 .then(async (res) => {
                     const data = res?.data;
                     const isJson = data && typeof data === 'object' && !Array.isArray(data);
+                    if (isJson && data.success && data.requires_action && typeof data.redirect_url === 'string' && data.redirect_url) {
+                        window.location.assign(data.redirect_url);
+                        return;
+                    }
                     if (isJson && data.success && isCardPaymentApprovedStatus(data.status) && data.redirect_url) {
                         await completeApprovedPurchase(data.order_id, data.redirect_url, 'approved');
                     } else if (isJson && !data.success) {

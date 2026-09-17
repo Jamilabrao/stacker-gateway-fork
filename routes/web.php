@@ -26,6 +26,26 @@ Route::get('/storage/{path}', \App\Http\Controllers\StorageServeController::clas
     ->where('path', '.+')
     ->name('storage.serve');
 
+Route::get('/.well-known/apple-developer-merchantid-domain-association', function () {
+    $path = public_path('.well-known/apple-developer-merchantid-domain-association');
+    if (is_file($path)) {
+        return response()->file($path, [
+            'Content-Type' => 'application/octet-stream',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+
+    $remote = Http::timeout(10)->get('https://cajupay.com.br/.well-known/apple-developer-merchantid-domain-association');
+    if (! $remote->successful()) {
+        abort(404);
+    }
+
+    return response($remote->body(), 200, [
+        'Content-Type' => 'application/octet-stream',
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+})->name('well-known.apple-pay');
+
 // Instalador: fallback quando o servidor envia /install para o Laravel (ex: document root diferente de public/)
 Route::any('/install', [\App\Http\Controllers\InstallServeController::class, '__invoke'])
     ->defaults('path', null)

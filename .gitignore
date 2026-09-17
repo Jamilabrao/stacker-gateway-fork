@@ -45,3 +45,4 @@ Docs Gateways
 /storage/stacker/
 /agent/node_modules
 /dist-releases
+/tmp*

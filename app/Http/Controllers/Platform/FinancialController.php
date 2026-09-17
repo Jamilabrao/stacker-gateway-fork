@@ -11,6 +11,7 @@ use App\Jobs\ReconcileCajuPayWithdrawalJob;
 use App\Jobs\ReconcileSpacepagWithdrawalJob;
 use App\Jobs\ReconcileWooviWithdrawalJob;
 use App\Jobs\ReconcileXflowWithdrawalJob;
+use App\Jobs\ReconcileOktoWithdrawalJob;
 use Plugins\OnlyUp\OnlyUpPayoutService;
 use Plugins\OnlyUp\ReconcileOnlyUpWithdrawalJob;
 use App\Http\Controllers\Platform\CajuPayAccountsController;
@@ -23,6 +24,7 @@ use App\Services\CajuPay\CajuPayWithdrawalReconcileService;
 use App\Services\Spacepag\SpacepagPayoutService;
 use App\Services\Woovi\WooviPayoutService;
 use App\Services\Xflow\XflowPayoutService;
+use App\Services\Okto\OktoPayoutService;
 use App\Services\EffectiveMerchantFees;
 use App\Support\CardInstallmentEconomics;
 use App\Support\PercentDecimal;
@@ -252,7 +254,7 @@ class FinancialController extends Controller
     public function updatePayoutGatewayPreference(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'preference' => ['required', 'string', 'in:auto,cajupay,woovi,bspay,versell,xflow,onlyup'],
+            'preference' => ['required', 'string', 'in:auto,cajupay,woovi,bspay,versell,xflow,okto,onlyup'],
         ]);
 
         $pref = $validated['preference'];
@@ -773,6 +775,55 @@ class FinancialController extends Controller
 
             return redirect()->route('plataforma.saques.index')
                 ->with('success', 'Saque enviado à Xflow. Será marcado como pago após confirmação do PIX (webhook).');
+        }
+
+        if ($slug === 'okto') {
+            $pixKey = PayoutUserSettings::pixKey($settings);
+            if ($pixKey === '') {
+                MerchantWithdrawalService::releasePayoutApproval($withdrawal);
+
+                return redirect()->route('plataforma.saques.index')
+                    ->with('error', 'O infoprodutor precisa cadastrar uma chave PIX para saque em Financeiro (painel do vendedor).');
+            }
+
+            $payout = new OktoPayoutService;
+            $result = $payout->sendWithdrawalToPix($withdrawal->fresh(), $owner);
+
+            if (! ($result['ok'] ?? false)) {
+                $prev = is_array($withdrawal->payout_meta) ? $withdrawal->payout_meta : [];
+                $withdrawal->update([
+                    'payout_provider' => 'okto',
+                    'payout_meta' => $prev + [
+                        'last_error' => $result['error'] ?? 'Erro desconhecido',
+                        'last_attempt_at' => now()->toIso8601String(),
+                    ],
+                ]);
+                MerchantWithdrawalService::releasePayoutApproval($withdrawal->fresh());
+                $this->notifyWithdrawalPayoutError($withdrawal, 'Okto: '.($result['error'] ?? 'Falha ao enviar o saque.'));
+
+                return redirect()->route('plataforma.saques.index')
+                    ->with('error', 'Okto: '.($result['error'] ?? 'Falha ao enviar o saque.'));
+            }
+
+            $withdrawal->update([
+                'payout_manual' => false,
+                'payout_provider' => 'okto',
+                'payout_external_id' => $result['transaction_id'] ?? null,
+                'payout_meta' => array_filter([
+                    'api_status' => 'pending',
+                    'requested_at' => now()->toIso8601String(),
+                ]),
+            ]);
+
+            ReconcileOktoWithdrawalJob::dispatch($withdrawal->fresh()->id)
+                ->delay(now()->addSeconds(90));
+
+            MerchantWithdrawalService::releasePayoutApproval($withdrawal->fresh());
+
+            PlatformAuditService::log('platform.withdrawal.approved', ['withdrawal_id' => $withdrawal->id, 'okto' => true, 'pending' => true], $request);
+
+            return redirect()->route('plataforma.saques.index')
+                ->with('success', 'Saque enviado à Okto. Será marcado como pago após confirmação do PIX (webhook).');
         }
 
         if ($slug === 'onlyup') {

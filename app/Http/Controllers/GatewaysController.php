@@ -12,6 +12,7 @@ use App\Models\Setting;
 use App\Services\CajuPay\CajuPayWebhookBootstrapService;
 use App\Services\Versell\VersellWebhookBootstrapService;
 use App\Services\Xflow\XflowWebhookBootstrapService;
+use App\Services\Okto\OktoWebhookBootstrapService;
 use App\Support\GatewayPluginRequirement;
 use App\Support\GatewayWebhookUrl;
 use App\Support\PlatformConfigContext;
@@ -133,6 +134,9 @@ class GatewaysController extends Controller
         } elseif ($slug === 'xflow') {
             $webhookUrl = GatewayWebhookUrl::forGateway('xflow');
             $webhookHelp = 'Cadastre esta URL HTTPS no painel Xflow (Integrações → Webhooks) ou use “Testar conexão” / salvar credenciais para registro automático. Eventos PIX: transaction.paid, transaction.refunded. Saque: withdrawal.processing/completed/failed. MED: dispute.opened/accepted/rejected (mesma URL ou …/xflow/disputes). O secret HMAC é devolvido uma única vez. Precisa ser HTTPS público. Chaves pk_test_ são sandbox (QR não pagável; saque via API não funciona em teste). Defesa de MED é no painel da Xflow > Disputas.';
+        } elseif ($slug === 'okto') {
+            $webhookUrl = GatewayWebhookUrl::forGateway('okto');
+            $webhookHelp = 'PIX Classic Non Betting. “Testar conexão” tenta registrar depositUrl e withdrawUrl nesta URL via PUT /operator. Precisa ser HTTPS público (GETFY_WEBHOOK_PUBLIC_URL). A Okto assina o body com SHA256withRSA no header X-Payload-Signature — cole a chave pública PEM. Header opcional Gaming-Operator-Token. Staging: demo-pix.oktopay.eu.';
         }
 
         $fileFieldsConfigured = [];
@@ -410,6 +414,13 @@ class GatewaysController extends Controller
                     $webhookWarning = $boot['warning'];
                 }
             }
+            if ($isConnected && $slug === 'okto') {
+                $boot = app(OktoWebhookBootstrapService::class)->bootstrap($credentials);
+                $credentials = $boot['credentials'];
+                if (! empty($boot['warning'])) {
+                    $webhookWarning = $boot['warning'];
+                }
+            }
         }
 
         $credential->is_connected = $isConnected;
@@ -679,12 +690,27 @@ class GatewaysController extends Controller
                     $credential->save();
                 }
             }
+            if ($ok && $slug === 'okto') {
+                $boot = app(OktoWebhookBootstrapService::class)->bootstrap($credentials);
+                $credentials = $boot['credentials'];
+                if (! empty($boot['warning'])) {
+                    $webhookWarning = $boot['warning'];
+                }
+                if ($credential) {
+                    $credential->setEncryptedCredentials($credentials);
+                    $credential->is_connected = true;
+                    $credential->save();
+                }
+            }
             $failMessage = 'Falha na autenticação. Verifique as credenciais.';
             if (! $ok && $slug === 'woovi') {
                 $failMessage = 'Falha na autenticação. Em testes, marque “Sandbox” e use um AppID do painel de sandbox; o AppID de produção só vale com Sandbox desmarcado.';
             }
             if (! $ok && $slug === 'linaopenx') {
                 $failMessage = 'Falha na autenticação Lina. Use Client ID/Secret corretos e deixe “Homologação (HML)” desmarcado se as credenciais forem de produção (iam.linaob.com.br). Marque HML só para iam.hml.linaob.com.br.';
+            }
+            if (! $ok && $slug === 'okto') {
+                $failMessage = 'Falha na autenticação Okto. Confira o access token e se “Staging” está marcado só com credenciais de demo-pix.oktopay.eu.';
             }
 
             return response()->json([

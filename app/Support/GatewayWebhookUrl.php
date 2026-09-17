@@ -31,6 +31,7 @@ final class GatewayWebhookUrl
             'xflow' => '/webhooks/gateways/xflow',
             'xflow.payout' => '/webhooks/gateways/xflow/payout',
             'xflow.disputes' => '/webhooks/gateways/xflow/disputes',
+            'okto' => '/webhooks/gateways/okto',
             'onlyup' => '/webhooks/gateways/onlyup',
             'bspay' => '/webhooks/gateways/bspay',
             'linaopenx' => '/webhooks/gateways/linaopenx',

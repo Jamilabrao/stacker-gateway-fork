@@ -261,4 +261,22 @@ class PlatformPayoutGatewayTest extends TestCase
         GatewayCredential::query()->whereIn('gateway_slug', ['cajupay', 'xflow'])->delete();
         Setting::set('platform_payout_gateway', null, null);
     }
+
+    public function test_okto_wins_when_only_okto_connected(): void
+    {
+        $cred = GatewayCredential::query()->firstOrNew([
+            'tenant_id' => null,
+            'gateway_slug' => 'okto',
+        ]);
+        $cred->is_connected = true;
+        $cred->setEncryptedCredentials([
+            'access_token' => 'okto-token',
+            'sandbox' => true,
+        ]);
+        $cred->save();
+
+        $this->assertSame('okto', PlatformPayoutGateway::activeSlug());
+
+        GatewayCredential::query()->where('gateway_slug', 'okto')->delete();
+    }
 }

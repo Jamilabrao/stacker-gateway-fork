@@ -621,6 +621,16 @@ const canTestConnection = computed(() => {
                                     <span class="text-sm text-zinc-600 dark:text-zinc-400">Sim (somente para testes)</span>
                                 </label>
                             </template>
+                            <template v-else-if="field.type === 'textarea'">
+                                <textarea
+                                    v-model="credentialValues[field.key]"
+                                    rows="5"
+                                    :placeholder="field.label"
+                                    :class="inputClass + ' font-mono text-xs'"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                />
+                            </template>
                             <template v-else>
                                 <input
                                     v-model="credentialValues[field.key]"

@@ -1092,6 +1092,9 @@ Route::middleware(['auth', 'admin.tenant', 'seller.panel', 'stacker.license', 'r
         Route::patch('/aplicacoes-api/{apiApplication}/webhook', [\App\Http\Controllers\ApiApplicationsController::class, 'updateWebhook'])->name('api-applications.webhook.update');
         Route::post('/aplicacoes-api/{apiApplication}/webhook/rotate-secret', [\App\Http\Controllers\ApiApplicationsController::class, 'rotateWebhookSecret'])->name('api-applications.webhook.rotate-secret');
         Route::get('/aplicacoes-api/{apiApplication}/webhook/deliveries', [\App\Http\Controllers\ApiApplicationsController::class, 'webhookDeliveries'])->name('api-applications.webhook.deliveries');
+        Route::post('/aplicacoes-api/{apiApplication}/webhook/deliveries/{delivery}/retry', [\App\Http\Controllers\ApiApplicationsController::class, 'retryWebhookDelivery'])
+            ->middleware('throttle:30,1')
+            ->name('api-applications.webhook.deliveries.retry');
         Route::post('/aplicacoes-api/{apiApplication}/regenerate-key', [\App\Http\Controllers\ApiApplicationsController::class, 'regenerateKey'])->name('api-applications.regenerate-key');
         Route::post('/aplicacoes-api/{apiApplication}/reveal-secret', [\App\Http\Controllers\ApiApplicationsController::class, 'revealSecret'])
             ->middleware('throttle:30,1')

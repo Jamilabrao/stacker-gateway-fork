@@ -5,6 +5,7 @@ namespace App\Services\Uazapi;
 use App\Models\CheckoutSession;
 use App\Models\Order;
 use App\Models\UazapiCampaign;
+use App\Models\UazapiInstance;
 use App\Models\UazapiOptOut;
 
 class UazapiCampaignAudience
@@ -17,12 +18,12 @@ class UazapiCampaignAudience
     /**
      * @return array<string, int>
      */
-    public function counts(int $tenantId): array
+    public function counts(int $tenantId, ?UazapiInstance $instance = null): array
     {
         return [
-            UazapiCampaign::AUDIENCE_ABANDONED_CART => count($this->recipients($tenantId, UazapiCampaign::AUDIENCE_ABANDONED_CART)),
-            UazapiCampaign::AUDIENCE_PENDING_PIX => count($this->recipients($tenantId, UazapiCampaign::AUDIENCE_PENDING_PIX)),
-            UazapiCampaign::AUDIENCE_BUYERS => count($this->recipients($tenantId, UazapiCampaign::AUDIENCE_BUYERS)),
+            UazapiCampaign::AUDIENCE_ABANDONED_CART => count($this->recipients($tenantId, UazapiCampaign::AUDIENCE_ABANDONED_CART, $instance)),
+            UazapiCampaign::AUDIENCE_PENDING_PIX => count($this->recipients($tenantId, UazapiCampaign::AUDIENCE_PENDING_PIX, $instance)),
+            UazapiCampaign::AUDIENCE_BUYERS => count($this->recipients($tenantId, UazapiCampaign::AUDIENCE_BUYERS, $instance)),
         ];
     }
 
@@ -35,7 +36,7 @@ class UazapiCampaignAudience
      *     image_url: string|null
      * }>
      */
-    public function recipients(int $tenantId, string $audience): array
+    public function recipients(int $tenantId, string $audience, ?UazapiInstance $instance = null): array
     {
         $max = (int) config('uazapi.campaign.max_recipients', 200);
         $optedOut = UazapiOptOut::query()
@@ -45,9 +46,9 @@ class UazapiCampaignAudience
         $blocked = array_fill_keys($optedOut, true);
 
         $rows = match ($audience) {
-            UazapiCampaign::AUDIENCE_ABANDONED_CART => $this->abandonedCarts($tenantId),
-            UazapiCampaign::AUDIENCE_PENDING_PIX => $this->pendingPix($tenantId),
-            UazapiCampaign::AUDIENCE_BUYERS => $this->buyers($tenantId),
+            UazapiCampaign::AUDIENCE_ABANDONED_CART => $this->abandonedCarts($tenantId, $instance),
+            UazapiCampaign::AUDIENCE_PENDING_PIX => $this->pendingPix($tenantId, $instance),
+            UazapiCampaign::AUDIENCE_BUYERS => $this->buyers($tenantId, $instance),
             default => [],
         };
 
@@ -69,7 +70,7 @@ class UazapiCampaignAudience
     /**
      * @return list<array{phone: string, checkout_session_id: int|null, order_id: int|null, vars: array<string, string>, image_url: string|null}>
      */
-    private function abandonedCarts(int $tenantId): array
+    private function abandonedCarts(int $tenantId, ?UazapiInstance $instance = null): array
     {
         $days = (int) config('uazapi.campaign.abandoned_days', 7);
         $sessions = CheckoutSession::query()
@@ -90,6 +91,9 @@ class UazapiCampaignAudience
             if ($phone === null) {
                 continue;
             }
+            if ($instance && ! $instance->appliesToProduct($session->product_id !== null ? (string) $session->product_id : null)) {
+                continue;
+            }
 
             $vars = $this->messageBuilder->fromCheckoutSession($session);
             $rows[] = [
@@ -107,7 +111,7 @@ class UazapiCampaignAudience
     /**
      * @return list<array{phone: string, checkout_session_id: int|null, order_id: int|null, vars: array<string, string>, image_url: string|null}>
      */
-    private function pendingPix(int $tenantId): array
+    private function pendingPix(int $tenantId, ?UazapiInstance $instance = null): array
     {
         $days = (int) config('uazapi.campaign.abandoned_days', 7);
         $orders = Order::query()
@@ -121,13 +125,13 @@ class UazapiCampaignAudience
             ->limit(800)
             ->get();
 
-        return $this->mapOrders($orders);
+        return $this->mapOrders($orders, $instance);
     }
 
     /**
      * @return list<array{phone: string, checkout_session_id: int|null, order_id: int|null, vars: array<string, string>, image_url: string|null}>
      */
-    private function buyers(int $tenantId): array
+    private function buyers(int $tenantId, ?UazapiInstance $instance = null): array
     {
         $days = (int) config('uazapi.campaign.buyers_days', 30);
         $orders = Order::query()
@@ -141,14 +145,14 @@ class UazapiCampaignAudience
             ->limit(800)
             ->get();
 
-        return $this->mapOrders($orders);
+        return $this->mapOrders($orders, $instance);
     }
 
     /**
      * @param  iterable<int, Order>  $orders
      * @return list<array{phone: string, checkout_session_id: int|null, order_id: int|null, vars: array<string, string>, image_url: string|null}>
      */
-    private function mapOrders(iterable $orders): array
+    private function mapOrders(iterable $orders, ?UazapiInstance $instance = null): array
     {
         $rows = [];
         foreach ($orders as $order) {
@@ -159,6 +163,9 @@ class UazapiCampaignAudience
             }
             $phone = $this->client->normalizePhone($raw);
             if ($phone === null) {
+                continue;
+            }
+            if ($instance && ! $instance->appliesToOrder($order)) {
                 continue;
             }
 

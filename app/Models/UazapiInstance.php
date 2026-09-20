@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\UazapiCartRecoverySteps;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
@@ -25,6 +26,7 @@ class UazapiInstance extends Model
 
     protected $fillable = [
         'tenant_id',
+        'name',
         'server_url',
         'instance_id',
         'instance_name',
@@ -36,6 +38,7 @@ class UazapiInstance extends Model
         'qrcode',
         'paircode',
         'is_active',
+        'is_default',
         'cart_recovery_enabled',
         'pix_recovery_enabled',
         'send_product_image',
@@ -45,6 +48,7 @@ class UazapiInstance extends Model
         'last_error',
         'connected_at',
         'webhook_synced_at',
+        'last_used_at',
         'label_map',
     ];
 
@@ -53,6 +57,7 @@ class UazapiInstance extends Model
         return [
             'instance_token' => 'encrypted',
             'is_active' => 'boolean',
+            'is_default' => 'boolean',
             'cart_recovery_enabled' => 'boolean',
             'pix_recovery_enabled' => 'boolean',
             'send_product_image' => 'boolean',
@@ -61,6 +66,7 @@ class UazapiInstance extends Model
             'label_map' => 'array',
             'connected_at' => 'datetime',
             'webhook_synced_at' => 'datetime',
+            'last_used_at' => 'datetime',
         ];
     }
 
@@ -69,9 +75,63 @@ class UazapiInstance extends Model
         return $this->hasMany(UazapiMessageDispatch::class);
     }
 
+    public function products(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'uazapi_instance_product')
+            ->withTimestamps();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function linkedProductIds(): array
+    {
+        if ($this->relationLoaded('products')) {
+            return $this->products->pluck('id')->map(fn ($id) => (string) $id)->unique()->values()->all();
+        }
+
+        return $this->products()->pluck('products.id')->map(fn ($id) => (string) $id)->unique()->values()->all();
+    }
+
+    public function appliesToProduct(?string $productId): bool
+    {
+        $linked = $this->linkedProductIds();
+        if ($linked === []) {
+            return true;
+        }
+        if ($productId === null || $productId === '') {
+            return false;
+        }
+
+        return in_array((string) $productId, $linked, true);
+    }
+
+    public function appliesToOrder(Order $order): bool
+    {
+        $linked = $this->linkedProductIds();
+        if ($linked === []) {
+            return true;
+        }
+
+        $order->loadMissing('orderItems');
+        $candidates = collect([$order->product_id])
+            ->merge($order->orderItems->pluck('product_id'))
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (string) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        return $candidates !== [] && count(array_intersect($linked, $candidates)) > 0;
+    }
+
     public static function forTenant(int $tenantId): ?self
     {
-        return static::query()->where('tenant_id', $tenantId)->first();
+        return static::query()
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->first();
     }
 
     public static function firstOrNewForTenant(int $tenantId): self
@@ -81,19 +141,66 @@ class UazapiInstance extends Model
             return $existing;
         }
 
+        return static::newForTenant($tenantId);
+    }
+
+    public static function newForTenant(int $tenantId): self
+    {
+        $template = static::forTenant($tenantId);
         $instance = new static;
         $instance->tenant_id = $tenantId;
+        $instance->name = $template ? 'Nova conta' : 'Conta principal';
         $instance->webhook_secret = Str::lower(Str::random(48));
         $instance->status = self::STATUS_DISCONNECTED;
         $instance->is_active = true;
-        $instance->cart_recovery_enabled = false;
-        $instance->pix_recovery_enabled = false;
-        $instance->send_product_image = true;
-        $instance->cart_recovery_steps = UazapiCartRecoverySteps::defaults();
-        $instance->pix_recovery_steps = UazapiCartRecoverySteps::pixDefaults();
-        $instance->message_pix = (string) (config('uazapi.defaults.messages.pix_generated') ?? '');
+        $instance->is_default = $template === null;
+        $instance->cart_recovery_enabled = (bool) ($template?->cart_recovery_enabled ?? false);
+        $instance->pix_recovery_enabled = (bool) ($template?->pix_recovery_enabled ?? false);
+        $instance->send_product_image = $template?->send_product_image ?? true;
+        $instance->cart_recovery_steps = $template?->cart_recovery_steps ?: UazapiCartRecoverySteps::defaults();
+        $instance->pix_recovery_steps = $template?->pix_recovery_steps ?: UazapiCartRecoverySteps::pixDefaults();
+        $instance->message_pix = (string) ($template?->message_pix ?: (config('uazapi.defaults.messages.pix_generated') ?? ''));
 
         return $instance;
+    }
+
+    public function displayName(): string
+    {
+        $name = trim((string) ($this->name ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        if (is_string($this->profile_name) && trim($this->profile_name) !== '') {
+            return trim($this->profile_name);
+        }
+
+        if (is_string($this->phone) && trim($this->phone) !== '') {
+            return trim($this->phone);
+        }
+
+        return 'Conta WhatsApp';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toSummaryArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->displayName(),
+            'status' => $this->status,
+            'phone' => $this->phone,
+            'profile_name' => $this->profile_name,
+            'server_url' => (string) ($this->server_url ?? ''),
+            'has_credentials' => $this->hasCredentials(),
+            'connected' => $this->isConnected(),
+            'is_active' => (bool) $this->is_active,
+            'is_default' => (bool) $this->is_default,
+            'product_ids' => $this->linkedProductIds(),
+            'last_error' => $this->last_error,
+        ];
     }
 
     public function hasCredentials(): bool
@@ -148,6 +255,8 @@ class UazapiInstance extends Model
 
         return [
             'id' => $this->id,
+            'name' => $this->displayName(),
+            'is_default' => (bool) $this->is_default,
             'status' => $this->status,
             'phone' => $this->phone,
             'profile_name' => $this->profile_name,
@@ -157,6 +266,7 @@ class UazapiInstance extends Model
             'has_token' => is_string($this->instance_token) && trim($this->instance_token) !== '',
             'has_credentials' => $this->hasCredentials(),
             'is_active' => (bool) $this->is_active,
+            'product_ids' => $this->linkedProductIds(),
             'cart_recovery_enabled' => (bool) $this->cart_recovery_enabled,
             'pix_recovery_enabled' => (bool) $this->pix_recovery_enabled,
             'send_product_image' => (bool) $this->send_product_image,

@@ -8,6 +8,7 @@ use App\Models\UazapiInstance;
 use App\Models\UazapiMessageDispatch;
 use App\Models\UazapiOptOut;
 use App\Models\UazapiRecoveryStop;
+use App\Services\Uazapi\UazapiAccountResolver;
 use App\Services\Uazapi\UazapiClient;
 use App\Services\Uazapi\UazapiDispatcher;
 use App\Services\Uazapi\UazapiMessageBuilder;
@@ -25,24 +26,20 @@ class ProcessUazapiCartRecoveryCommand extends Command
     public function handle(
         UazapiClient $client,
         UazapiMessageBuilder $messageBuilder,
-        UazapiDispatcher $dispatcher
+        UazapiDispatcher $dispatcher,
+        UazapiAccountResolver $resolver
     ): int {
-        if (! $client->settings()->isConfigured()) {
-            $this->line('uazapi inativa ou servidor não configurado.');
-
-            return self::SUCCESS;
-        }
-
-        $instances = UazapiInstance::query()
+        $tenantIds = UazapiInstance::query()
             ->where('is_active', true)
             ->where('status', UazapiInstance::STATUS_CONNECTED)
             ->where(function ($query) {
                 $query->where('cart_recovery_enabled', true)
                     ->orWhere('pix_recovery_enabled', true);
             })
-            ->get();
+            ->distinct()
+            ->pluck('tenant_id');
 
-        if ($instances->isEmpty()) {
+        if ($tenantIds->isEmpty()) {
             $this->line('Nenhuma instância WhatsApp conectada com recuperação ativa.');
 
             return self::SUCCESS;
@@ -50,14 +47,9 @@ class ProcessUazapiCartRecoveryCommand extends Command
 
         $dispatched = 0;
 
-        foreach ($instances as $instance) {
-            if ($instance->cart_recovery_enabled) {
-                $dispatched += $this->processCart($instance, $client, $messageBuilder, $dispatcher);
-            }
-
-            if ($instance->pix_recovery_enabled) {
-                $dispatched += $this->processPix($instance, $client, $messageBuilder, $dispatcher);
-            }
+        foreach ($tenantIds as $tenantId) {
+            $dispatched += $this->processCart((int) $tenantId, $client, $messageBuilder, $dispatcher, $resolver);
+            $dispatched += $this->processPix((int) $tenantId, $client, $messageBuilder, $dispatcher, $resolver);
         }
 
         if ($dispatched > 0) {
@@ -70,22 +62,33 @@ class ProcessUazapiCartRecoveryCommand extends Command
     }
 
     private function processCart(
-        UazapiInstance $instance,
+        int $tenantId,
         UazapiClient $client,
         UazapiMessageBuilder $messageBuilder,
-        UazapiDispatcher $dispatcher
+        UazapiDispatcher $dispatcher,
+        UazapiAccountResolver $resolver
     ): int {
-        $steps = $instance->cartRecoverySteps();
-        if ($steps === []) {
+        $windowProbe = $resolver->routableForTenant($tenantId, UazapiAccountResolver::CAPABILITY_CART);
+        if ($windowProbe->isEmpty()) {
             return 0;
         }
 
-        $maxDelayMinutes = (int) end($steps)['delay_minutes'];
+        $maxDelayMinutes = $windowProbe
+            ->map(function (UazapiInstance $instance) {
+                $steps = $instance->cartRecoverySteps();
+
+                return $steps === [] ? 0 : (int) end($steps)['delay_minutes'];
+            })
+            ->max();
+        if ($maxDelayMinutes < 1) {
+            return 0;
+        }
+
         $windowStart = now()->subMinutes($maxDelayMinutes + 120);
         $dispatched = 0;
 
         $sessions = CheckoutSession::query()
-            ->where('tenant_id', $instance->tenant_id)
+            ->where('tenant_id', $tenantId)
             ->whereIn('step', [CheckoutSession::STEP_FORM_STARTED, CheckoutSession::STEP_FORM_FILLED])
             ->whereNull('order_id')
             ->whereNotNull('phone')
@@ -95,6 +98,16 @@ class ProcessUazapiCartRecoveryCommand extends Command
             ->get();
 
         foreach ($sessions as $session) {
+            $instance = $resolver->resolveForSession($session);
+            if (! $instance) {
+                continue;
+            }
+
+            $steps = $instance->cartRecoverySteps();
+            if ($steps === []) {
+                continue;
+            }
+
             $phone = $client->normalizePhone($session->phone);
             if ($phone === null) {
                 continue;
@@ -144,22 +157,33 @@ class ProcessUazapiCartRecoveryCommand extends Command
     }
 
     private function processPix(
-        UazapiInstance $instance,
+        int $tenantId,
         UazapiClient $client,
         UazapiMessageBuilder $messageBuilder,
-        UazapiDispatcher $dispatcher
+        UazapiDispatcher $dispatcher,
+        UazapiAccountResolver $resolver
     ): int {
-        $reminderSteps = $instance->pixRecoverySteps();
-        if ($reminderSteps === []) {
+        $windowProbe = $resolver->routableForTenant($tenantId, UazapiAccountResolver::CAPABILITY_PIX);
+        if ($windowProbe->isEmpty()) {
             return 0;
         }
 
-        $maxDelayMinutes = (int) end($reminderSteps)['delay_minutes'];
+        $maxDelayMinutes = $windowProbe
+            ->map(function (UazapiInstance $instance) {
+                $steps = $instance->pixRecoverySteps();
+
+                return $steps === [] ? 0 : (int) end($steps)['delay_minutes'];
+            })
+            ->max();
+        if ($maxDelayMinutes < 1) {
+            return 0;
+        }
+
         $windowStart = now()->subMinutes($maxDelayMinutes + 120);
         $dispatched = 0;
 
         $orderIds = UazapiMessageDispatch::query()
-            ->where('uazapi_instance_id', $instance->id)
+            ->where('tenant_id', $tenantId)
             ->where('event_type', UazapiInstance::EVENT_PIX_GENERATED)
             ->where('sequence_step', 0)
             ->where('status', UazapiMessageDispatch::STATUS_SENT)
@@ -181,6 +205,16 @@ class ProcessUazapiCartRecoveryCommand extends Command
             ->get();
 
         foreach ($orders as $order) {
+            $instance = $resolver->resolveForOrder($order);
+            if (! $instance) {
+                continue;
+            }
+
+            $reminderSteps = $instance->pixRecoverySteps();
+            if ($reminderSteps === []) {
+                continue;
+            }
+
             $phone = $client->normalizePhone((string) ($order->phone ?? ''));
             if ($phone === null) {
                 $metadata = is_array($order->metadata) ? $order->metadata : [];

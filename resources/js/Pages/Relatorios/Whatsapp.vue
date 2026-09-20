@@ -155,6 +155,7 @@ function statusLabel(row) {
                 </nav>
                 <p v-if="instance?.phone" class="text-sm text-zinc-500">
                     Número: <span class="font-mono text-zinc-800 dark:text-zinc-200">{{ instance.phone }}</span>
+                    <span v-if="instance.name"> · {{ instance.name }}</span>
                 </p>
             </div>
 

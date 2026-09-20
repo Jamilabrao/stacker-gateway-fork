@@ -463,8 +463,10 @@ class UazapiRecoveryTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('credentials_configured', true)
+            ->assertJsonPath('signup_url', 'https://uazapi.dev/')
             ->assertJsonPath('instance.has_credentials', true)
             ->assertJsonPath('instance.has_token', true)
+            ->assertJsonPath('accounts.0.has_credentials', true)
             ->assertJsonMissingPath('instance.instance_token');
 
         $instance = UazapiInstance::forTenant((int) $seller->id);
@@ -503,6 +505,212 @@ class UazapiRecoveryTest extends TestCase
             ->assertOk();
 
         $this->assertSame('seller-instance-token', UazapiInstance::forTenant((int) $seller->id)?->instance_token);
+        $this->assertTrue((bool) UazapiInstance::forTenant((int) $seller->id)?->is_default);
+    }
+
+    public function test_seller_can_add_second_account_with_own_server_and_token(): void
+    {
+        Http::fake([
+            'https://principal.uazapi.com/*' => Http::response(['instance' => ['status' => 'disconnected']]),
+            'https://backup.uazapi.com/*' => Http::response(['instance' => ['status' => 'disconnected']]),
+        ]);
+
+        $seller = User::factory()->create(['role' => User::ROLE_INFOPRODUTOR]);
+        $seller->forceFill([
+            'tenant_id' => $seller->id,
+            'kyc_status' => User::KYC_APPROVED,
+            'account_status' => 'approved',
+        ])->save();
+
+        $this->actingAs($seller)
+            ->putJson(route('integrations.uazapi.update'), [
+                'name' => 'Conta principal',
+                'server_url' => 'https://principal.uazapi.com',
+                'instance_token' => 'token-principal',
+                'is_active' => true,
+            ])
+            ->assertOk();
+
+        $created = $this->actingAs($seller)
+            ->postJson(route('integrations.uazapi.store'))
+            ->assertOk();
+        $secondId = $created->json('instance.id');
+        $this->assertNotNull($secondId);
+
+        $this->actingAs($seller)
+            ->putJson(route('integrations.uazapi.instance.update', $secondId), [
+                'name' => 'Contingência',
+                'server_url' => 'https://backup.uazapi.com',
+                'instance_token' => 'token-backup',
+                'is_active' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('instance.server_url', 'https://backup.uazapi.com')
+            ->assertJsonPath('instance.has_token', true)
+            ->assertJsonMissingPath('instance.instance_token');
+
+        $this->assertSame(2, UazapiInstance::query()->where('tenant_id', $seller->id)->count());
+        $backup = UazapiInstance::query()->find($secondId);
+        $this->assertSame('https://backup.uazapi.com', $backup?->server_url);
+        $this->assertSame('token-backup', $backup?->instance_token);
+        $this->assertFalse((bool) $backup?->is_default);
+    }
+
+    public function test_cart_recovery_does_not_duplicate_across_two_connected_accounts(): void
+    {
+        Queue::fake();
+        $this->seedPlatform();
+        $this->connectedInstance([
+            'name' => 'Conta principal',
+            'is_default' => true,
+            'cart_recovery_enabled' => true,
+            'cart_recovery_steps' => [
+                ['delay_minutes' => 10, 'message' => 'Primeira {nome}! {link}'],
+            ],
+        ]);
+        $this->connectedInstance([
+            'name' => 'Contingência',
+            'is_default' => false,
+            'server_url' => 'https://backup.uazapi.com',
+            'instance_token' => 'backup-token',
+            'cart_recovery_enabled' => true,
+            'cart_recovery_steps' => [
+                ['delay_minutes' => 10, 'message' => 'Backup {nome}! {link}'],
+            ],
+        ], createNew: true);
+
+        $product = $this->createTestProduct(['checkout_slug' => 'uazapi-multi']);
+        CheckoutSession::create([
+            'tenant_id' => 1,
+            'product_id' => $product->id,
+            'checkout_slug' => $product->checkout_slug,
+            'session_token' => 'uazapi-multi-'.uniqid(),
+            'step' => CheckoutSession::STEP_FORM_FILLED,
+            'email' => 'lead@example.com',
+            'name' => 'Lead WA',
+            'phone' => '11988776655',
+            'form_started_at' => now()->subMinutes(20),
+            'form_filled_at' => now()->subMinutes(15),
+        ]);
+
+        $this->artisan('uazapi:process-cart-recovery')->assertSuccessful();
+
+        $this->assertSame(1, UazapiMessageDispatch::query()->count());
+        $this->assertSame(
+            UazapiInstance::forTenant(1)?->id,
+            UazapiMessageDispatch::query()->first()?->uazapi_instance_id
+        );
+    }
+
+    public function test_recovery_fails_over_to_second_account_when_default_is_down(): void
+    {
+        Queue::fake();
+        $this->seedPlatform();
+        $this->connectedInstance([
+            'name' => 'Conta principal',
+            'is_default' => true,
+            'status' => UazapiInstance::STATUS_DISCONNECTED,
+            'cart_recovery_enabled' => true,
+            'cart_recovery_steps' => [
+                ['delay_minutes' => 10, 'message' => 'Principal {nome}'],
+            ],
+        ]);
+        $backup = $this->connectedInstance([
+            'name' => 'Contingência',
+            'is_default' => false,
+            'server_url' => 'https://backup.uazapi.com',
+            'instance_token' => 'backup-token',
+            'cart_recovery_enabled' => true,
+            'cart_recovery_steps' => [
+                ['delay_minutes' => 10, 'message' => 'Backup {nome}'],
+            ],
+        ], createNew: true);
+
+        $product = $this->createTestProduct(['checkout_slug' => 'uazapi-failover']);
+        CheckoutSession::create([
+            'tenant_id' => 1,
+            'product_id' => $product->id,
+            'checkout_slug' => $product->checkout_slug,
+            'session_token' => 'uazapi-failover-'.uniqid(),
+            'step' => CheckoutSession::STEP_FORM_FILLED,
+            'email' => 'lead@example.com',
+            'name' => 'Lead WA',
+            'phone' => '11988776655',
+            'form_started_at' => now()->subMinutes(20),
+            'form_filled_at' => now()->subMinutes(15),
+        ]);
+
+        $this->artisan('uazapi:process-cart-recovery')->assertSuccessful();
+
+        $dispatch = UazapiMessageDispatch::query()->first();
+        $this->assertNotNull($dispatch);
+        $this->assertSame($backup->id, $dispatch->uazapi_instance_id);
+        $this->assertStringContainsString('Backup Lead WA', $dispatch->message);
+    }
+
+    public function test_seller_can_limit_recovery_to_selected_products(): void
+    {
+        Http::fake([
+            'https://meu.uazapi.com/*' => Http::response(['instance' => ['status' => 'disconnected']]),
+        ]);
+
+        $seller = User::factory()->create(['role' => User::ROLE_INFOPRODUTOR]);
+        $seller->forceFill([
+            'tenant_id' => $seller->id,
+            'kyc_status' => User::KYC_APPROVED,
+            'account_status' => 'approved',
+        ])->save();
+        $product = $this->createTestProduct(['tenant_id' => $seller->id, 'checkout_slug' => 'uazapi-assigned']);
+
+        $this->actingAs($seller)
+            ->putJson(route('integrations.uazapi.update'), [
+                'server_url' => 'https://meu.uazapi.com',
+                'instance_token' => 'seller-instance-token',
+                'is_active' => true,
+                'product_ids' => [$product->id],
+            ])
+            ->assertOk()
+            ->assertJsonPath('instance.product_ids.0', (string) $product->id);
+
+        $instance = UazapiInstance::forTenant((int) $seller->id);
+        $this->assertTrue($instance->appliesToProduct($product->id));
+        $this->assertFalse($instance->appliesToProduct('prod-outro'));
+    }
+
+    public function test_cart_recovery_skips_products_not_assigned_to_account(): void
+    {
+        Queue::fake();
+        $this->seedPlatform();
+        $assigned = $this->createTestProduct(['checkout_slug' => 'uazapi-assigned-cart', 'name' => 'Produto A']);
+        $ignored = $this->createTestProduct(['checkout_slug' => 'uazapi-ignored-cart', 'name' => 'Produto B']);
+        $instance = $this->connectedInstance([
+            'cart_recovery_enabled' => true,
+            'cart_recovery_steps' => [
+                ['delay_minutes' => 10, 'message' => 'Oi {produto}'],
+            ],
+        ]);
+        $instance->products()->sync([$assigned->id]);
+
+        foreach ([$assigned, $ignored] as $product) {
+            CheckoutSession::create([
+                'tenant_id' => 1,
+                'product_id' => $product->id,
+                'checkout_slug' => $product->checkout_slug,
+                'session_token' => 'uazapi-prod-'.uniqid(),
+                'step' => CheckoutSession::STEP_FORM_FILLED,
+                'email' => 'lead@example.com',
+                'name' => 'Lead WA',
+                'phone' => '11988776655',
+                'form_started_at' => now()->subMinutes(20),
+                'form_filled_at' => now()->subMinutes(15),
+            ]);
+        }
+
+        $this->artisan('uazapi:process-cart-recovery')->assertSuccessful();
+
+        $this->assertSame(1, UazapiMessageDispatch::query()->count());
+        $this->assertSame($assigned->id, CheckoutSession::query()->find(UazapiMessageDispatch::query()->first()->checkout_session_id)?->product_id);
+        $this->assertStringContainsString('Produto A', UazapiMessageDispatch::query()->first()->message);
     }
 
     public function test_seller_admin_token_gets_explicit_error(): void
@@ -723,15 +931,19 @@ class UazapiRecoveryTest extends TestCase
     /**
      * @param  array<string, mixed>  $overrides
      */
-    private function connectedInstance(array $overrides = []): UazapiInstance
+    private function connectedInstance(array $overrides = [], bool $createNew = false): UazapiInstance
     {
-        $instance = UazapiInstance::firstOrNewForTenant(1);
+        $instance = $createNew
+            ? UazapiInstance::newForTenant(1)
+            : UazapiInstance::firstOrNewForTenant(1);
         $instance->fill(array_merge([
+            'name' => $instance->name ?: 'Conta principal',
             'server_url' => 'https://stacker.uazapi.com',
             'instance_token' => 'inst-token',
             'instance_id' => 'i-local',
             'status' => UazapiInstance::STATUS_CONNECTED,
             'is_active' => true,
+            'is_default' => ! $createNew,
             'cart_recovery_enabled' => false,
             'pix_recovery_enabled' => false,
             'connected_at' => now(),

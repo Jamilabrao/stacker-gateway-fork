@@ -9,6 +9,7 @@ use App\Models\UazapiInstance;
 use App\Models\UazapiMessageDispatch;
 use App\Models\UazapiOptOut;
 use App\Models\UazapiRecoveryStop;
+use App\Services\Uazapi\UazapiAccountResolver;
 use App\Services\Uazapi\UazapiClient;
 use App\Services\Uazapi\UazapiLabelService;
 use Illuminate\Bus\Queueable;
@@ -61,12 +62,43 @@ class UazapiSendMessageJob implements ShouldQueue
 
         $instance = $dispatch->instance;
         if (! $instance instanceof UazapiInstance || ! $instance->canSendRecovery()) {
-            $dispatch->update([
-                'status' => UazapiMessageDispatch::STATUS_FAILED,
-                'error' => 'Instância WhatsApp desconectada ou inativa.',
-            ]);
+            $capability = $dispatch->event_type === UazapiInstance::EVENT_CART_RECOVERY
+                ? UazapiAccountResolver::CAPABILITY_CART
+                : ($dispatch->event_type === UazapiInstance::EVENT_PIX_GENERATED
+                    ? UazapiAccountResolver::CAPABILITY_PIX
+                    : UazapiAccountResolver::CAPABILITY_SEND);
+            $resolver = app(UazapiAccountResolver::class);
+            $applies = null;
+            if ($dispatch->order_id) {
+                $order = Order::query()->find($dispatch->order_id);
+                if ($order) {
+                    $applies = fn (UazapiInstance $candidate) => $candidate->appliesToOrder($order);
+                }
+            } elseif ($dispatch->checkout_session_id) {
+                $session = CheckoutSession::query()->find($dispatch->checkout_session_id);
+                if ($session) {
+                    $applies = fn (UazapiInstance $candidate) => $candidate->appliesToProduct(
+                        $session->product_id !== null ? (string) $session->product_id : null
+                    );
+                }
+            }
+            $fallback = $instance instanceof UazapiInstance
+                ? $resolver->failover($instance, $capability, $applies)
+                : $resolver->resolveForTenant((int) $dispatch->tenant_id, $capability);
 
-            return;
+            if ($fallback) {
+                $dispatch->uazapi_instance_id = $fallback->id;
+                $dispatch->save();
+                $dispatch->setRelation('instance', $fallback);
+                $instance = $fallback;
+            } else {
+                $dispatch->update([
+                    'status' => UazapiMessageDispatch::STATUS_FAILED,
+                    'error' => 'Instância WhatsApp desconectada ou inativa.',
+                ]);
+
+                return;
+            }
         }
 
         $token = (string) $instance->instance_token;

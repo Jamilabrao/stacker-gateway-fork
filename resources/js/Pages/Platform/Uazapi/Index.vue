@@ -49,6 +49,7 @@ function statusLabel(status) {
                     <thead>
                         <tr class="border-b border-zinc-200 text-xs uppercase text-zinc-500 dark:border-zinc-700">
                             <th class="px-2 py-2">Tenant</th>
+                            <th class="px-2 py-2">Conta</th>
                             <th class="px-2 py-2">Status</th>
                             <th class="px-2 py-2">Número</th>
                             <th class="px-2 py-2">Perfil</th>
@@ -57,8 +58,12 @@ function statusLabel(status) {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="row in instances" :key="row.tenant_id" class="border-b border-zinc-100 dark:border-zinc-800">
+                        <tr v-for="row in instances" :key="row.id || row.tenant_id" class="border-b border-zinc-100 dark:border-zinc-800">
                             <td class="px-2 py-2 font-mono text-xs">{{ row.tenant_id }}</td>
+                            <td class="px-2 py-2">
+                                {{ row.name || '—' }}
+                                <span v-if="row.is_default" class="ml-1 text-xs text-zinc-500">padrão</span>
+                            </td>
                             <td class="px-2 py-2">{{ statusLabel(row.status) }}</td>
                             <td class="px-2 py-2">{{ row.phone || '—' }}</td>
                             <td class="px-2 py-2">{{ row.profile_name || '—' }}</td>

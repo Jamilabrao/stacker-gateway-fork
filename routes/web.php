@@ -1135,12 +1135,19 @@ Route::middleware(['auth', 'admin.tenant', 'seller.panel', 'stacker.license', 'r
 
         Route::middleware('seller.integration:uazapi')->group(function () {
             Route::get('/integracoes/uazapi', [\App\Http\Controllers\UazapiIntegrationController::class, 'show'])->name('integrations.uazapi.show');
+            Route::post('/integracoes/uazapi', [\App\Http\Controllers\UazapiIntegrationController::class, 'store'])->name('integrations.uazapi.store');
             Route::get('/integracoes/uazapi/status', [\App\Http\Controllers\UazapiIntegrationController::class, 'status'])->name('integrations.uazapi.status');
             Route::post('/integracoes/uazapi/connect', [\App\Http\Controllers\UazapiIntegrationController::class, 'connect'])->name('integrations.uazapi.connect');
             Route::post('/integracoes/uazapi/disconnect', [\App\Http\Controllers\UazapiIntegrationController::class, 'disconnect'])->name('integrations.uazapi.disconnect');
             Route::put('/integracoes/uazapi', [\App\Http\Controllers\UazapiIntegrationController::class, 'update'])->name('integrations.uazapi.update');
             Route::post('/integracoes/uazapi/test', [\App\Http\Controllers\UazapiIntegrationController::class, 'test'])->name('integrations.uazapi.test');
             Route::post('/integracoes/uazapi/campaigns', [\App\Http\Controllers\UazapiIntegrationController::class, 'storeCampaign'])->name('integrations.uazapi.campaigns.store');
+            Route::put('/integracoes/uazapi/{instance}', [\App\Http\Controllers\UazapiIntegrationController::class, 'update'])->name('integrations.uazapi.instance.update');
+            Route::get('/integracoes/uazapi/{instance}/status', [\App\Http\Controllers\UazapiIntegrationController::class, 'status'])->name('integrations.uazapi.instance.status');
+            Route::post('/integracoes/uazapi/{instance}/connect', [\App\Http\Controllers\UazapiIntegrationController::class, 'connect'])->name('integrations.uazapi.instance.connect');
+            Route::post('/integracoes/uazapi/{instance}/disconnect', [\App\Http\Controllers\UazapiIntegrationController::class, 'disconnect'])->name('integrations.uazapi.instance.disconnect');
+            Route::post('/integracoes/uazapi/{instance}/default', [\App\Http\Controllers\UazapiIntegrationController::class, 'setDefault'])->name('integrations.uazapi.instance.default');
+            Route::delete('/integracoes/uazapi/{instance}', [\App\Http\Controllers\UazapiIntegrationController::class, 'destroy'])->name('integrations.uazapi.instance.destroy');
         });
 
         Route::middleware('seller.integration:webhook')->group(function () {

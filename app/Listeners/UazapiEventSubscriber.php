@@ -8,6 +8,7 @@ use App\Models\CheckoutSession;
 use App\Models\Order;
 use App\Models\UazapiInstance;
 use App\Models\UazapiMessageDispatch;
+use App\Services\Uazapi\UazapiAccountResolver;
 use App\Services\Uazapi\UazapiClient;
 use App\Services\Uazapi\UazapiDispatcher;
 use App\Services\Uazapi\UazapiLabelService;
@@ -22,6 +23,7 @@ class UazapiEventSubscriber
         private UazapiMessageBuilder $messageBuilder,
         private UazapiLabelService $labels,
         private UazapiClient $client,
+        private UazapiAccountResolver $resolver,
     ) {}
 
     /**
@@ -50,12 +52,18 @@ class UazapiEventSubscriber
             return;
         }
 
-        $instance = UazapiInstance::forTenant($tenantId);
+        $instanceIds = $this->resolver->instanceIdsForOrderOrSession(
+            (int) $order->id,
+            $sessionId !== null ? (int) $sessionId : null
+        );
         $phone = $this->resolveOrderPhone($order);
-        if ($instance && $phone) {
+        if ($phone && $instanceIds !== []) {
             $normalized = $this->client->normalizePhone($phone);
             if ($normalized) {
-                $this->labels->apply($instance, $normalized, UazapiLabelService::PAID);
+                $instances = UazapiInstance::query()->whereIn('id', $instanceIds)->get();
+                foreach ($instances as $instance) {
+                    $this->labels->apply($instance, $normalized, UazapiLabelService::PAID);
+                }
             }
         }
     }
@@ -68,8 +76,8 @@ class UazapiEventSubscriber
             return;
         }
 
-        $instance = UazapiInstance::forTenant($tenantId);
-        if (! $instance || ! $instance->pix_recovery_enabled || ! $instance->canSendRecovery()) {
+        $instance = $this->resolver->resolveForOrder($order);
+        if (! $instance) {
             return;
         }
 

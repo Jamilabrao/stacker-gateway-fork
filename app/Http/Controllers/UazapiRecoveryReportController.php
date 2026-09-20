@@ -21,7 +21,14 @@ class UazapiRecoveryReportController extends Controller
 
         $tenantId = (int) auth()->user()->tenant_id;
         $days = $period === '30dias' ? 30 : 7;
-        $instance = UazapiInstance::forTenant($tenantId);
+        $instances = UazapiInstance::query()
+            ->where('tenant_id', $tenantId)
+            ->with('products')
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->get();
+        $instance = $instances->first(fn (UazapiInstance $row) => $row->isConnected())
+            ?? $instances->first();
 
         $campaigns = UazapiCampaign::query()
             ->where('tenant_id', $tenantId)
@@ -37,7 +44,7 @@ class UazapiRecoveryReportController extends Controller
             'instance' => $instance?->toPublicArray(false),
             'metrics' => $insights->forTenant($tenantId, $days),
             'recent' => $insights->recentDispatches($tenantId),
-            'audience_counts' => $audiences->counts($tenantId),
+            'audience_counts' => $audiences->counts($tenantId, $instance),
             'campaigns' => $campaigns,
             'campaign_defaults' => config('uazapi.campaign.defaults', []),
         ]);

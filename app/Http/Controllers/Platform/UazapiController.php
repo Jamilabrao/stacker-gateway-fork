@@ -17,11 +17,14 @@ class UazapiController extends Controller
             ->limit(30)
             ->get()
             ->map(fn (UazapiInstance $instance) => [
+                'id' => $instance->id,
                 'tenant_id' => $instance->tenant_id,
+                'name' => $instance->displayName(),
                 'status' => $instance->status,
                 'phone' => $instance->phone,
                 'profile_name' => $instance->profile_name,
                 'is_active' => $instance->is_active,
+                'is_default' => $instance->is_default,
                 'cart_recovery_enabled' => $instance->cart_recovery_enabled,
                 'pix_recovery_enabled' => $instance->pix_recovery_enabled,
                 'connected_at' => $instance->connected_at?->toIso8601String(),

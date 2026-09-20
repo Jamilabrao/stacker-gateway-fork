@@ -41,7 +41,7 @@ class UazapiCampaignService
             throw new InvalidArgumentException('Mensagem excede '.$maxLen.' caracteres.');
         }
 
-        $recipients = $this->audience->recipients((int) $instance->tenant_id, $audience);
+        $recipients = $this->audience->recipients((int) $instance->tenant_id, $audience, $instance);
         $campaign = UazapiCampaign::query()->create([
             'tenant_id' => $instance->tenant_id,
             'uazapi_instance_id' => $instance->id,

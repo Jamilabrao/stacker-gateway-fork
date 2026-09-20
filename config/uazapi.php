@@ -10,6 +10,8 @@ return [
 
     'docs_url' => 'https://docs.uazapi.com/',
 
+    'signup_url' => env('UAZAPI_SIGNUP_URL', 'https://uazapi.dev/'),
+
     'retry' => [
         'tries' => (int) env('UAZAPI_TRIES', 3),
         'backoff' => [30, 90],

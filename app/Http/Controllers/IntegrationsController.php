@@ -97,11 +97,12 @@ class IntegrationsController extends Controller
 
         $uazapi = null;
         if (in_array(SellerIntegrationVisibility::UAZAPI, $visibleIds, true) && $tenantId !== null) {
-            $instance = UazapiInstance::forTenant((int) $tenantId);
+            $instances = UazapiInstance::query()->where('tenant_id', (int) $tenantId)->get();
             $uazapi = [
-                'configured' => $instance?->hasCredentials() ?? false,
-                'connected' => $instance?->isConnected() ?? false,
-                'is_active' => (bool) ($instance?->is_active ?? false),
+                'configured' => $instances->contains(fn (UazapiInstance $instance) => $instance->hasCredentials()),
+                'connected' => $instances->contains(fn (UazapiInstance $instance) => $instance->isConnected()),
+                'is_active' => $instances->contains(fn (UazapiInstance $instance) => $instance->is_active && $instance->hasCredentials()),
+                'accounts' => $instances->count(),
             ];
         }
 

@@ -239,6 +239,7 @@ class UazapiDispatcher
 
         $dispatch->track_id = 'uazapi-dispatch-'.$dispatch->id;
         $dispatch->save();
+        $instance->forceFill(['last_used_at' => now()])->save();
 
         $job = UazapiSendMessageJob::dispatch($dispatch->id)->onQueue((string) config('uazapi.queue', 'uazapi'));
         if ($delaySeconds > 0) {

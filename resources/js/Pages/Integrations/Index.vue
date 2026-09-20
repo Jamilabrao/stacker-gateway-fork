@@ -232,6 +232,7 @@ function onAppClick(app) {
         />
         <UazapiSidebar
             :open="uazapiSidebarOpen"
+            :products="products"
             @close="closeUazapiSidebar"
         />
     </div>

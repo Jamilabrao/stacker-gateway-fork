@@ -99,6 +99,8 @@ class SellerActivityLogService
 
     public const PROFILE_PASSWORD_UPDATED = 'profile.password.updated';
 
+    public const PROFILE_WHATSAPP_UPDATED = 'profile.whatsapp.updated';
+
     public const KYC_DOCUMENT_UPLOADED = 'kyc.document.uploaded';
 
     public const KYC_SUBMITTED = 'kyc.submitted';
@@ -266,6 +268,7 @@ class SellerActivityLogService
         self::PROFILE_UPDATED => ['group' => self::GROUP_AUTH, 'label' => 'Atualizou o perfil'],
         self::PROFILE_USERNAME_UPDATED => ['group' => self::GROUP_AUTH, 'label' => 'Alterou o nome de usuário'],
         self::PROFILE_PASSWORD_UPDATED => ['group' => self::GROUP_AUTH, 'label' => 'Alterou a senha'],
+        self::PROFILE_WHATSAPP_UPDATED => ['group' => self::GROUP_AUTH, 'label' => 'Atualizou o WhatsApp'],
         self::KYC_DOCUMENT_UPLOADED => ['group' => self::GROUP_KYC, 'label' => 'Enviou documento de KYC'],
         self::KYC_SUBMITTED => ['group' => self::GROUP_KYC, 'label' => 'Enviou KYC para análise'],
         self::PJ_CONVERSION_STARTED => ['group' => self::GROUP_KYC, 'label' => 'Iniciou migração de CPF para CNPJ'],
@@ -527,6 +530,7 @@ class SellerActivityLogService
             self::STUDENT_CREATED, self::STUDENT_UPDATED, self::STUDENT_DELETED => $label.self::namedSuffix($metadata, 'email'),
             self::COPRODUCTION_INVITED, self::COPRODUCTION_REMOVED, self::COPRODUCTION_ACCEPTED => $label.self::namedSuffix($metadata, 'email'),
             self::SUBSCRIPTION_CANCELLED, self::API_PIX_CANCELLED, self::DISPUTE_DEFENSE_SUBMITTED, self::DISPUTE_DOSSIER_GENERATED => $label.self::orderSuffix($metadata),
+            self::PROFILE_WHATSAPP_UPDATED => $label.self::namedSuffix($metadata, 'phone_to'),
             default => $label,
         };
     }

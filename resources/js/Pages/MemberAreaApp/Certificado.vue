@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import MemberAreaAppLayout from '@/Layouts/MemberAreaAppLayout.vue';
 import { Link } from '@inertiajs/vue3';
+import { useMemberAreaHref } from '@/composables/useMemberAreaHref';
 import {
     resolveCertificateBody,
     certificateFontCssVars,
@@ -16,11 +17,14 @@ const props = defineProps({
     certificate: { type: Object, required: true },
     recipient_name: { type: String, default: '' },
     slug: { type: String, required: true },
+    base_url: { type: String, default: '' },
     certificate_available: { type: Boolean, default: false },
     progress_percent: { type: Number, default: 0 },
     completion_required_percent: { type: Number, default: 100 },
     certificate_release: { type: Object, default: () => ({}) },
 });
+
+const { href } = useMemberAreaHref(props.slug, props.base_url);
 
 const release = computed(() => props.certificate_release || {});
 
@@ -348,7 +352,7 @@ onUnmounted(() => {
                     Salvar PDF A3
                 </button>
             </template>
-            <Link :href="`/m/${slug}`" class="rounded-xl border-2 px-5 py-2.5 text-sm font-medium transition hover:opacity-90" style="border-color: var(--ma-primary); color: var(--ma-primary)">
+            <Link :href="href('/')" class="rounded-xl border-2 px-5 py-2.5 text-sm font-medium transition hover:opacity-90" style="border-color: var(--ma-primary); color: var(--ma-primary)">
                 Voltar à área de membros
             </Link>
         </div>

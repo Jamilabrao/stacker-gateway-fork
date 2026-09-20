@@ -3,16 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\LogsSellerActivity;
-use App\Models\Product;
 use App\Models\CademiIntegration;
+use App\Models\Product;
 use App\Models\SpedyIntegration;
+use App\Models\UazapiInstance;
 use App\Models\UtmifyIntegration;
 use App\Models\Webhook;
 use App\Plugins\PluginRegistry;
 use App\Services\SellerActivityLogService;
 use App\Services\SellerIntegrationVisibility;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -95,12 +95,23 @@ class IntegrationsController extends Controller
         $products = Product::forTenant($tenantId)->orderBy('name')->get(['id', 'name']);
         $visibleIds = SellerIntegrationVisibility::visibleIdsForTenant($tenantId !== null ? (int) $tenantId : null);
 
+        $uazapi = null;
+        if (in_array(SellerIntegrationVisibility::UAZAPI, $visibleIds, true) && $tenantId !== null) {
+            $instance = UazapiInstance::forTenant((int) $tenantId);
+            $uazapi = [
+                'configured' => $instance?->hasCredentials() ?? false,
+                'connected' => $instance?->isConnected() ?? false,
+                'is_active' => (bool) ($instance?->is_active ?? false),
+            ];
+        }
+
         return Inertia::render('Integrations/Index', [
             'webhooks' => in_array(SellerIntegrationVisibility::WEBHOOK, $visibleIds, true) ? $webhooks : [],
             'webhook_events' => $webhookEvents,
             'utmify_integrations' => in_array(SellerIntegrationVisibility::UTMIFY, $visibleIds, true) ? $utmifyIntegrations : [],
             'spedy_integrations' => in_array(SellerIntegrationVisibility::SPEDY, $visibleIds, true) ? $spedyIntegrations : [],
             'cademi_integrations' => in_array(SellerIntegrationVisibility::CADEMI, $visibleIds, true) ? $cademiIntegrations : [],
+            'uazapi' => $uazapi,
             'products' => $products,
             'visible_integrations' => $visibleIds,
         ]);
@@ -116,6 +127,7 @@ class IntegrationsController extends Controller
         $this->logSellerActivity(SellerActivityLogService::INTEGRATION_PLUGIN_ENABLED, null, [
             'name' => $slug,
         ]);
+
         return back()->with('success', 'Plugin ativado.');
     }
 
@@ -129,6 +141,7 @@ class IntegrationsController extends Controller
         $this->logSellerActivity(SellerActivityLogService::INTEGRATION_PLUGIN_DISABLED, null, [
             'name' => $slug,
         ]);
+
         return back()->with('success', 'Plugin desativado.');
     }
 
@@ -146,6 +159,7 @@ class IntegrationsController extends Controller
         $this->logSellerActivity(SellerActivityLogService::INTEGRATION_PLUGIN_UNINSTALLED, null, [
             'name' => $slug,
         ]);
+
         return back()->with('success', 'Plugin excluído.');
     }
 }

@@ -22,6 +22,8 @@ class SellerIntegrationVisibility
 
     public const CADEMI = 'cademi';
 
+    public const UAZAPI = 'uazapi';
+
     /**
      * Catálogo das apps da aba Integrações do infoprodutor.
      * Novas integrações entram aqui; use default false para manter fora de uso até o teste.
@@ -53,6 +55,12 @@ class SellerIntegrationVisibility
                 'id' => self::CADEMI,
                 'label' => 'Cademí',
                 'description' => 'Área de membros externa. Sincronize alunos após a compra.',
+                'default' => true,
+            ],
+            [
+                'id' => self::UAZAPI,
+                'label' => 'WhatsApp',
+                'description' => 'Recuperação de carrinho e PIX pendente pelo WhatsApp do infoprodutor (uazapi).',
                 'default' => true,
             ],
         ];

@@ -164,6 +164,11 @@ Route::get('/cron', function () {
     return response()->json(['ok' => true, 'message' => 'Schedule executed']);
 })->middleware('throttle:60,1')->name('cron.url');
 
+Route::post('/webhooks/uazapi/{secret}', [\App\Http\Controllers\Webhooks\UazapiWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1')
+    ->where('secret', '[A-Za-z0-9]{32,64}')
+    ->name('webhooks.uazapi');
+
 Route::middleware(['throttle:60,1', \App\Http\Middleware\LogInboundGatewayWebhook::class])->group(function () {
     Route::post('/webhooks/gateways/linaopenx', [\App\Http\Controllers\Webhooks\LinaOpenxWebhookController::class, 'handle'])->name('webhooks.linaopenx');
     Route::post('/webhooks/gateways/spacepag', [\App\Http\Controllers\Webhooks\SpacepagWebhookController::class, 'handle'])->name('webhooks.spacepag');
@@ -720,6 +725,8 @@ Route::prefix('plataforma')->name('plataforma.')->group(function () {
         Route::get('/integrax', [\App\Http\Controllers\Platform\IntegraxController::class, 'index'])->name('integrax.index');
         Route::put('/integrax', [\App\Http\Controllers\Platform\IntegraxController::class, 'update'])->name('integrax.update');
         Route::post('/integrax/test', [\App\Http\Controllers\Platform\IntegraxController::class, 'test'])->name('integrax.test');
+
+        Route::get('/uazapi', [\App\Http\Controllers\Platform\UazapiController::class, 'index'])->name('uazapi.index');
     });
 });
 
@@ -1052,6 +1059,9 @@ Route::middleware(['auth', 'admin.tenant', 'seller.panel', 'stacker.license', 'r
     Route::get('/relatorios', [\App\Http\Controllers\RelatoriosController::class, 'index'])
         ->middleware('team.permission:relatorios.view')
         ->name('relatorios.index');
+    Route::get('/relatorios/whatsapp', [\App\Http\Controllers\UazapiRecoveryReportController::class, 'index'])
+        ->middleware(['team.permission:relatorios.view', 'seller.integration:uazapi'])
+        ->name('relatorios.whatsapp');
     Route::get('/relatorios/carrinhos-abandonados/export', [\App\Http\Controllers\RelatoriosController::class, 'exportAbandonedCarts'])
         ->middleware(['throttle:30,1', 'team.permission:relatorios.view'])
         ->name('relatorios.abandoned-carts.export');
@@ -1124,6 +1134,23 @@ Route::middleware(['auth', 'admin.tenant', 'seller.panel', 'stacker.license', 'r
             Route::put('/integracoes/cademi/{cademi}', [\App\Http\Controllers\CademiController::class, 'update'])->name('integrations.cademi.update');
             Route::delete('/integracoes/cademi/{cademi}', [\App\Http\Controllers\CademiController::class, 'destroy'])->name('integrations.cademi.destroy');
             Route::get('/integracoes/cademi/{cademi}/tags', [\App\Http\Controllers\CademiController::class, 'tags'])->name('integrations.cademi.tags');
+        });
+
+        Route::middleware('seller.integration:uazapi')->group(function () {
+            Route::get('/integracoes/uazapi', [\App\Http\Controllers\UazapiIntegrationController::class, 'show'])->name('integrations.uazapi.show');
+            Route::post('/integracoes/uazapi', [\App\Http\Controllers\UazapiIntegrationController::class, 'store'])->name('integrations.uazapi.store');
+            Route::get('/integracoes/uazapi/status', [\App\Http\Controllers\UazapiIntegrationController::class, 'status'])->name('integrations.uazapi.status');
+            Route::post('/integracoes/uazapi/connect', [\App\Http\Controllers\UazapiIntegrationController::class, 'connect'])->name('integrations.uazapi.connect');
+            Route::post('/integracoes/uazapi/disconnect', [\App\Http\Controllers\UazapiIntegrationController::class, 'disconnect'])->name('integrations.uazapi.disconnect');
+            Route::put('/integracoes/uazapi', [\App\Http\Controllers\UazapiIntegrationController::class, 'update'])->name('integrations.uazapi.update');
+            Route::post('/integracoes/uazapi/test', [\App\Http\Controllers\UazapiIntegrationController::class, 'test'])->name('integrations.uazapi.test');
+            Route::post('/integracoes/uazapi/campaigns', [\App\Http\Controllers\UazapiIntegrationController::class, 'storeCampaign'])->name('integrations.uazapi.campaigns.store');
+            Route::put('/integracoes/uazapi/{instance}', [\App\Http\Controllers\UazapiIntegrationController::class, 'update'])->name('integrations.uazapi.instance.update');
+            Route::get('/integracoes/uazapi/{instance}/status', [\App\Http\Controllers\UazapiIntegrationController::class, 'status'])->name('integrations.uazapi.instance.status');
+            Route::post('/integracoes/uazapi/{instance}/connect', [\App\Http\Controllers\UazapiIntegrationController::class, 'connect'])->name('integrations.uazapi.instance.connect');
+            Route::post('/integracoes/uazapi/{instance}/disconnect', [\App\Http\Controllers\UazapiIntegrationController::class, 'disconnect'])->name('integrations.uazapi.instance.disconnect');
+            Route::post('/integracoes/uazapi/{instance}/default', [\App\Http\Controllers\UazapiIntegrationController::class, 'setDefault'])->name('integrations.uazapi.instance.default');
+            Route::delete('/integracoes/uazapi/{instance}', [\App\Http\Controllers\UazapiIntegrationController::class, 'destroy'])->name('integrations.uazapi.instance.destroy');
         });
 
         Route::middleware('seller.integration:webhook')->group(function () {

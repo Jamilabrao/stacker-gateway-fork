@@ -7,6 +7,7 @@ import SpedySidebar from '@/components/integrations/SpedySidebar.vue';
 import UtmifySidebar from '@/components/integrations/UtmifySidebar.vue';
 import WebhookSidebar from '@/components/integrations/WebhookSidebar.vue';
 import CademiSidebar from '@/components/integrations/CademiSidebar.vue';
+import UazapiSidebar from '@/components/integrations/UazapiSidebar.vue';
 import { Zap } from 'lucide-vue-next';
 import { useI18n } from '@/composables/useI18n';
 
@@ -38,6 +39,12 @@ const APPS_BASE = [
         description: t('integrations.cademi.description', 'Área de membros externa. Após a compra, sincronize o aluno e conceda acesso na Cademí.'),
         image: 'images/integrations/cademi.png',
     },
+    {
+        id: 'uazapi',
+        name: 'WhatsApp',
+        description: t('integrations.uazapi.description', 'Recupere carrinhos abandonados e PIX pendentes pelo seu WhatsApp.'),
+        image: 'images/integrations/whatsapp.svg',
+    },
 ];
 
 const props = defineProps({
@@ -46,8 +53,9 @@ const props = defineProps({
     utmify_integrations: { type: Array, default: () => [] },
     spedy_integrations: { type: Array, default: () => [] },
     cademi_integrations: { type: Array, default: () => [] },
+    uazapi: { type: Object, default: null },
     products: { type: Array, default: () => [] },
-    visible_integrations: { type: Array, default: () => ['webhook', 'utmify', 'spedy', 'cademi'] },
+    visible_integrations: { type: Array, default: () => ['webhook', 'utmify', 'spedy', 'cademi', 'uazapi'] },
 });
 
 const APPS = computed(() => {
@@ -80,6 +88,12 @@ const APPS = computed(() => {
                 status: hasActive ? 'active' : undefined,
             };
         }
+        if (app.id === 'uazapi') {
+            return {
+                ...app,
+                status: props.uazapi?.configured && props.uazapi?.is_active ? 'active' : undefined,
+            };
+        }
         return app;
     });
 });
@@ -88,6 +102,7 @@ const webhookSidebarOpen = ref(false);
 const utmifySidebarOpen = ref(false);
 const spedySidebarOpen = ref(false);
 const cademiSidebarOpen = ref(false);
+const uazapiSidebarOpen = ref(false);
 
 function openWebhookSidebar() {
     webhookSidebarOpen.value = true;
@@ -121,6 +136,15 @@ function closeCademiSidebar() {
     cademiSidebarOpen.value = false;
 }
 
+function openUazapiSidebar() {
+    uazapiSidebarOpen.value = true;
+}
+
+function closeUazapiSidebar() {
+    uazapiSidebarOpen.value = false;
+    router.reload({ only: ['uazapi'] });
+}
+
 function onWebhookSaved() {
     router.reload();
 }
@@ -146,6 +170,8 @@ function onAppClick(app) {
         openSpedySidebar();
     } else if (app.id === 'cademi') {
         openCademiSidebar();
+    } else if (app.id === 'uazapi') {
+        openUazapiSidebar();
     }
 }
 </script>
@@ -203,6 +229,11 @@ function onAppClick(app) {
             :products="products"
             @close="closeCademiSidebar"
             @saved="onCademiSaved"
+        />
+        <UazapiSidebar
+            :open="uazapiSidebarOpen"
+            :products="products"
+            @close="closeUazapiSidebar"
         />
     </div>
 </template>

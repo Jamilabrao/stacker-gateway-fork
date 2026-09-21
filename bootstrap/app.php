@@ -42,6 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Checkout pixel mirror usa sendBeacon + checkout_session_token (público, throttled)
         $middleware->validateCsrfTokens(except: [
             'webhooks/gateways/*',
+            'webhooks/uazapi/*',
             'checkout/pixel/events',
             'checkout/pixel/purchase-ack',
             'api/metrics/collect',
@@ -203,6 +204,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('coproduction:expire')->hourly();
         $schedule->command('checkout:fire-abandoned-cart-webhooks --minutes=10')->everyMinute();
         $schedule->command('integrax:process-cart-recovery')->everyMinute();
+        $schedule->command('uazapi:process-cart-recovery')->everyMinute();
         $schedule->command('email-campaign:process')->everyMinute();
         $schedule->command('payments:reconcile-pending --limit=200 --days=45 --min-age-minutes=0')->everyTwoMinutes();
         $schedule->command('payments:reconcile-mercadopago --limit=100 --days=45 --min-age-minutes=0')->everyMinute();

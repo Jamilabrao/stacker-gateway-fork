@@ -83,6 +83,8 @@ class SellerActivityLogService
 
     public const API_WEBHOOK_SECRET_ROTATED = 'api.webhook.secret.rotated';
 
+    public const API_WEBHOOK_DELIVERY_RETRIED = 'api.webhook.delivery.retried';
+
     public const API_PIX_CANCELLED = 'api.pix.cancelled';
 
     public const AUTH_LOGIN = 'auth.login';
@@ -258,6 +260,7 @@ class SellerActivityLogService
         self::API_WEBHOOK_UPDATED => ['group' => self::GROUP_API, 'label' => 'Atualizou webhook da API'],
         self::API_WEBHOOK_CLEARED => ['group' => self::GROUP_API, 'label' => 'Removeu webhook da API'],
         self::API_WEBHOOK_SECRET_ROTATED => ['group' => self::GROUP_API, 'label' => 'Rotacionou secret do webhook'],
+        self::API_WEBHOOK_DELIVERY_RETRIED => ['group' => self::GROUP_API, 'label' => 'Reenviou entrega de webhook da API'],
         self::API_PIX_CANCELLED => ['group' => self::GROUP_API, 'label' => 'Cancelou cobrança PIX via API'],
         self::AUTH_LOGIN => ['group' => self::GROUP_AUTH, 'label' => 'Entrou no painel'],
         self::AUTH_LOGOUT => ['group' => self::GROUP_AUTH, 'label' => 'Saiu do painel'],

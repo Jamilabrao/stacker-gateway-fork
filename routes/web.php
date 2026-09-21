@@ -828,6 +828,7 @@ Route::middleware(['auth', 'admin.tenant', 'seller.panel', 'stacker.license', 'r
     Route::get('/meu-perfil', [\App\Http\Controllers\ProfileController::class, 'index'])->name('profile.index');
     Route::post('/meu-perfil', [\App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
     Route::put('/meu-perfil/username', [\App\Http\Controllers\ProfileController::class, 'updateUsername'])->name('profile.update-username');
+    Route::put('/meu-perfil/whatsapp', [\App\Http\Controllers\ProfileController::class, 'updateWhatsapp'])->name('profile.update-whatsapp');
     Route::put('/meu-perfil/senha', [\App\Http\Controllers\ProfileController::class, 'updatePassword'])->name('profile.update-password');
     Route::put('/meu-perfil/preferencias-push', [\App\Http\Controllers\ProfileController::class, 'updatePushPreferences'])->name('profile.push-preferences');
     Route::post('/meu-perfil/migrar-para-cnpj', [\App\Http\Controllers\PjConversionController::class, 'start'])->middleware('throttle:10,1')->name('profile.pj-conversion.start');

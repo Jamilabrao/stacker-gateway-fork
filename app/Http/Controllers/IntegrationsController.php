@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\LogsSellerActivity;
 use App\Models\CademiIntegration;
 use App\Models\Product;
 use App\Models\SpedyIntegration;
+use App\Models\EvolutionInstance;
 use App\Models\UazapiInstance;
 use App\Models\UtmifyIntegration;
 use App\Models\Webhook;
@@ -106,6 +107,17 @@ class IntegrationsController extends Controller
             ];
         }
 
+        $evolution = null;
+        if (in_array(SellerIntegrationVisibility::EVOLUTION, $visibleIds, true) && $tenantId !== null) {
+            $instances = EvolutionInstance::query()->where('tenant_id', (int) $tenantId)->get();
+            $evolution = [
+                'configured' => $instances->contains(fn (EvolutionInstance $instance) => $instance->hasCredentials()),
+                'connected' => $instances->contains(fn (EvolutionInstance $instance) => $instance->isConnected()),
+                'is_active' => $instances->contains(fn (EvolutionInstance $instance) => $instance->is_active && $instance->hasCredentials()),
+                'accounts' => $instances->count(),
+            ];
+        }
+
         return Inertia::render('Integrations/Index', [
             'webhooks' => in_array(SellerIntegrationVisibility::WEBHOOK, $visibleIds, true) ? $webhooks : [],
             'webhook_events' => $webhookEvents,
@@ -113,6 +125,7 @@ class IntegrationsController extends Controller
             'spedy_integrations' => in_array(SellerIntegrationVisibility::SPEDY, $visibleIds, true) ? $spedyIntegrations : [],
             'cademi_integrations' => in_array(SellerIntegrationVisibility::CADEMI, $visibleIds, true) ? $cademiIntegrations : [],
             'uazapi' => $uazapi,
+            'evolution' => $evolution,
             'products' => $products,
             'visible_integrations' => $visibleIds,
         ]);

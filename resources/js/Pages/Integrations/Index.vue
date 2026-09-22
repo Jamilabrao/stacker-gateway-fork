@@ -8,6 +8,7 @@ import UtmifySidebar from '@/components/integrations/UtmifySidebar.vue';
 import WebhookSidebar from '@/components/integrations/WebhookSidebar.vue';
 import CademiSidebar from '@/components/integrations/CademiSidebar.vue';
 import UazapiSidebar from '@/components/integrations/UazapiSidebar.vue';
+import EvolutionSidebar from '@/components/integrations/EvolutionSidebar.vue';
 import { Zap } from 'lucide-vue-next';
 import { useI18n } from '@/composables/useI18n';
 
@@ -41,9 +42,15 @@ const APPS_BASE = [
     },
     {
         id: 'uazapi',
-        name: 'WhatsApp',
-        description: t('integrations.uazapi.description', 'Recupere carrinhos abandonados e PIX pendentes pelo seu WhatsApp.'),
-        image: 'images/integrations/whatsapp.svg',
+        name: 'Uazapi',
+        description: t('integrations.uazapi.description', 'Recupere carrinhos abandonados e PIX pendentes pelo seu WhatsApp via Uazapi.'),
+        image: 'images/integrations/uazapi.avif',
+    },
+    {
+        id: 'evolution',
+        name: 'Evolution API',
+        description: t('integrations.evolution.description', 'Recupere carrinhos abandonados e PIX pendentes pelo WhatsApp via Evolution API.'),
+        image: 'images/integrations/Evolution.svg',
     },
 ];
 
@@ -54,8 +61,9 @@ const props = defineProps({
     spedy_integrations: { type: Array, default: () => [] },
     cademi_integrations: { type: Array, default: () => [] },
     uazapi: { type: Object, default: null },
+    evolution: { type: Object, default: null },
     products: { type: Array, default: () => [] },
-    visible_integrations: { type: Array, default: () => ['webhook', 'utmify', 'spedy', 'cademi', 'uazapi'] },
+    visible_integrations: { type: Array, default: () => ['webhook', 'utmify', 'spedy', 'cademi', 'uazapi', 'evolution'] },
 });
 
 const APPS = computed(() => {
@@ -94,6 +102,12 @@ const APPS = computed(() => {
                 status: props.uazapi?.configured && props.uazapi?.is_active ? 'active' : undefined,
             };
         }
+        if (app.id === 'evolution') {
+            return {
+                ...app,
+                status: props.evolution?.configured && props.evolution?.is_active ? 'active' : undefined,
+            };
+        }
         return app;
     });
 });
@@ -103,6 +117,7 @@ const utmifySidebarOpen = ref(false);
 const spedySidebarOpen = ref(false);
 const cademiSidebarOpen = ref(false);
 const uazapiSidebarOpen = ref(false);
+const evolutionSidebarOpen = ref(false);
 
 function openWebhookSidebar() {
     webhookSidebarOpen.value = true;
@@ -145,6 +160,15 @@ function closeUazapiSidebar() {
     router.reload({ only: ['uazapi'] });
 }
 
+function openEvolutionSidebar() {
+    evolutionSidebarOpen.value = true;
+}
+
+function closeEvolutionSidebar() {
+    evolutionSidebarOpen.value = false;
+    router.reload({ only: ['evolution'] });
+}
+
 function onWebhookSaved() {
     router.reload();
 }
@@ -172,6 +196,8 @@ function onAppClick(app) {
         openCademiSidebar();
     } else if (app.id === 'uazapi') {
         openUazapiSidebar();
+    } else if (app.id === 'evolution') {
+        openEvolutionSidebar();
     }
 }
 </script>
@@ -234,6 +260,11 @@ function onAppClick(app) {
             :open="uazapiSidebarOpen"
             :products="products"
             @close="closeUazapiSidebar"
+        />
+        <EvolutionSidebar
+            :open="evolutionSidebarOpen"
+            :products="products"
+            @close="closeEvolutionSidebar"
         />
     </div>
 </template>

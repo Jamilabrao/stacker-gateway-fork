@@ -3,12 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Models\CheckoutSession;
+use App\Models\EvolutionInstance;
+use App\Models\EvolutionMessageDispatch;
 use App\Models\Order;
-use App\Models\UazapiInstance;
-use App\Models\UazapiMessageDispatch;
-use App\Services\Uazapi\UazapiAccountResolver;
-use App\Services\Uazapi\UazapiClient;
-use App\Services\Uazapi\UazapiDispatcher;
+use App\Services\Evolution\EvolutionAccountResolver;
+use App\Services\Evolution\EvolutionClient;
+use App\Services\Evolution\EvolutionDispatcher;
 use App\Services\Uazapi\UazapiMessageBuilder;
 use App\Services\Whatsapp\WhatsappRecoveryGuard;
 use DateTimeInterface;
@@ -16,21 +16,21 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
-class ProcessUazapiCartRecoveryCommand extends Command
+class ProcessEvolutionCartRecoveryCommand extends Command
 {
-    protected $signature = 'uazapi:process-cart-recovery';
+    protected $signature = 'evolution:process-cart-recovery';
 
-    protected $description = 'Envia WhatsApp de recuperação de carrinho e lembretes de PIX pendente via uazapi.';
+    protected $description = 'Envia WhatsApp de recuperação de carrinho e lembretes de PIX pendente via Evolution API.';
 
     public function handle(
-        UazapiClient $client,
+        EvolutionClient $client,
         UazapiMessageBuilder $messageBuilder,
-        UazapiDispatcher $dispatcher,
-        UazapiAccountResolver $resolver
+        EvolutionDispatcher $dispatcher,
+        EvolutionAccountResolver $resolver
     ): int {
-        $tenantIds = UazapiInstance::query()
+        $tenantIds = EvolutionInstance::query()
             ->where('is_active', true)
-            ->where('status', UazapiInstance::STATUS_CONNECTED)
+            ->where('status', EvolutionInstance::STATUS_CONNECTED)
             ->where(function ($query) {
                 $query->where('cart_recovery_enabled', true)
                     ->orWhere('pix_recovery_enabled', true);
@@ -39,7 +39,7 @@ class ProcessUazapiCartRecoveryCommand extends Command
             ->pluck('tenant_id');
 
         if ($tenantIds->isEmpty()) {
-            $this->line('Nenhuma instância WhatsApp conectada com recuperação ativa.');
+            $this->line('Nenhuma instância Evolution conectada com recuperação ativa.');
 
             return self::SUCCESS;
         }
@@ -52,28 +52,28 @@ class ProcessUazapiCartRecoveryCommand extends Command
         }
 
         if ($dispatched > 0) {
-            Log::info('ProcessUazapiCartRecoveryCommand: WhatsApp enfileirados', ['count' => $dispatched]);
+            Log::info('ProcessEvolutionCartRecoveryCommand: WhatsApp enfileirados', ['count' => $dispatched]);
         }
 
-        $this->info("uazapi recovery: {$dispatched} mensagem(ns) enfileirada(s).");
+        $this->info("evolution recovery: {$dispatched} mensagem(ns) enfileirada(s).");
 
         return self::SUCCESS;
     }
 
     private function processCart(
         int $tenantId,
-        UazapiClient $client,
+        EvolutionClient $client,
         UazapiMessageBuilder $messageBuilder,
-        UazapiDispatcher $dispatcher,
-        UazapiAccountResolver $resolver
+        EvolutionDispatcher $dispatcher,
+        EvolutionAccountResolver $resolver
     ): int {
-        $windowProbe = $resolver->routableForTenant($tenantId, UazapiAccountResolver::CAPABILITY_CART);
+        $windowProbe = $resolver->routableForTenant($tenantId, EvolutionAccountResolver::CAPABILITY_CART);
         if ($windowProbe->isEmpty()) {
             return 0;
         }
 
         $maxDelayMinutes = $windowProbe
-            ->map(function (UazapiInstance $instance) {
+            ->map(function (EvolutionInstance $instance) {
                 $steps = $instance->cartRecoverySteps();
 
                 return $steps === [] ? 0 : (int) end($steps)['delay_minutes'];
@@ -124,7 +124,7 @@ class ProcessUazapiCartRecoveryCommand extends Command
             $vars = $messageBuilder->fromCheckoutSession($session);
 
             foreach ($steps as $index => $step) {
-                if (WhatsappRecoveryGuard::sessionTaken((int) $session->id, UazapiInstance::EVENT_CART_RECOVERY, $index)) {
+                if (WhatsappRecoveryGuard::sessionTaken((int) $session->id, EvolutionInstance::EVENT_CART_RECOVERY, $index)) {
                     continue;
                 }
 
@@ -152,18 +152,18 @@ class ProcessUazapiCartRecoveryCommand extends Command
 
     private function processPix(
         int $tenantId,
-        UazapiClient $client,
+        EvolutionClient $client,
         UazapiMessageBuilder $messageBuilder,
-        UazapiDispatcher $dispatcher,
-        UazapiAccountResolver $resolver
+        EvolutionDispatcher $dispatcher,
+        EvolutionAccountResolver $resolver
     ): int {
-        $windowProbe = $resolver->routableForTenant($tenantId, UazapiAccountResolver::CAPABILITY_PIX);
+        $windowProbe = $resolver->routableForTenant($tenantId, EvolutionAccountResolver::CAPABILITY_PIX);
         if ($windowProbe->isEmpty()) {
             return 0;
         }
 
         $maxDelayMinutes = $windowProbe
-            ->map(function (UazapiInstance $instance) {
+            ->map(function (EvolutionInstance $instance) {
                 $steps = $instance->pixRecoverySteps();
 
                 return $steps === [] ? 0 : (int) end($steps)['delay_minutes'];
@@ -176,11 +176,11 @@ class ProcessUazapiCartRecoveryCommand extends Command
         $windowStart = now()->subMinutes($maxDelayMinutes + 120);
         $dispatched = 0;
 
-        $orderIds = UazapiMessageDispatch::query()
+        $orderIds = EvolutionMessageDispatch::query()
             ->where('tenant_id', $tenantId)
-            ->where('event_type', UazapiInstance::EVENT_PIX_GENERATED)
+            ->where('event_type', EvolutionInstance::EVENT_PIX_GENERATED)
             ->where('sequence_step', 0)
-            ->where('status', UazapiMessageDispatch::STATUS_SENT)
+            ->where('status', EvolutionMessageDispatch::STATUS_SENT)
             ->where('created_at', '>=', $windowStart)
             ->pluck('order_id')
             ->filter()
@@ -231,7 +231,7 @@ class ProcessUazapiCartRecoveryCommand extends Command
 
             foreach ($reminderSteps as $index => $step) {
                 $stepIndex = $index + 1;
-                if (WhatsappRecoveryGuard::orderStepTaken((int) $order->id, UazapiInstance::EVENT_PIX_GENERATED, $stepIndex)) {
+                if (WhatsappRecoveryGuard::orderStepTaken((int) $order->id, EvolutionInstance::EVENT_PIX_GENERATED, $stepIndex)) {
                     continue;
                 }
 
@@ -273,11 +273,11 @@ class ProcessUazapiCartRecoveryCommand extends Command
 
     private function pixOriginAt(int $orderId): ?Carbon
     {
-        $dispatch = UazapiMessageDispatch::query()
+        $dispatch = EvolutionMessageDispatch::query()
             ->where('order_id', $orderId)
-            ->where('event_type', UazapiInstance::EVENT_PIX_GENERATED)
+            ->where('event_type', EvolutionInstance::EVENT_PIX_GENERATED)
             ->where('sequence_step', 0)
-            ->where('status', UazapiMessageDispatch::STATUS_SENT)
+            ->where('status', EvolutionMessageDispatch::STATUS_SENT)
             ->orderBy('id')
             ->first();
 

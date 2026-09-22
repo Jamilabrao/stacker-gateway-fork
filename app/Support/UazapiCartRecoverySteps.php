@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\UazapiInstance;
 use InvalidArgumentException;
 
 class UazapiCartRecoverySteps
@@ -24,7 +23,7 @@ class UazapiCartRecoverySteps
     /**
      * @return array<int, array{delay_minutes: int, message: string}>
      */
-    public static function forInstance(?UazapiInstance $instance): array
+    public static function forInstance(?object $instance): array
     {
         $raw = $instance?->cart_recovery_steps;
         if (is_array($raw) && $raw !== []) {
@@ -52,7 +51,7 @@ class UazapiCartRecoverySteps
     /**
      * @return array<int, array{delay_minutes: int, message: string}>
      */
-    public static function forPixInstance(?UazapiInstance $instance): array
+    public static function forPixInstance(?object $instance): array
     {
         if ($instance === null || $instance->pix_recovery_steps === null) {
             return self::pixDefaults();
@@ -69,7 +68,7 @@ class UazapiCartRecoverySteps
     /**
      * @return array<int, array{delay_value: int, delay_unit: string, message: string}>
      */
-    public static function toUiPixSteps(?UazapiInstance $instance): array
+    public static function toUiPixSteps(?object $instance): array
     {
         return array_map(
             fn (array $step) => self::toUiStep($step),
@@ -80,7 +79,7 @@ class UazapiCartRecoverySteps
     /**
      * @return array<int, array{delay_value: int, delay_unit: string, message: string}>
      */
-    public static function toUiSteps(?UazapiInstance $instance): array
+    public static function toUiSteps(?object $instance): array
     {
         return array_map(
             fn (array $step) => self::toUiStep($step),

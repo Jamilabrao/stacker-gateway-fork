@@ -26,6 +26,14 @@ class UazapiClient
         return $copy;
     }
 
+    public function usingServer(?string $url): self
+    {
+        $copy = clone $this;
+        $copy->overrideServerUrl = $this->normalizeServerUrl($url);
+
+        return $copy;
+    }
+
     public function normalizeServerUrl(?string $url): string
     {
         $url = trim((string) $url);

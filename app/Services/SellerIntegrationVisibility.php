@@ -24,6 +24,8 @@ class SellerIntegrationVisibility
 
     public const UAZAPI = 'uazapi';
 
+    public const EVOLUTION = 'evolution';
+
     /**
      * Catálogo das apps da aba Integrações do infoprodutor.
      * Novas integrações entram aqui; use default false para manter fora de uso até o teste.
@@ -59,8 +61,14 @@ class SellerIntegrationVisibility
             ],
             [
                 'id' => self::UAZAPI,
-                'label' => 'WhatsApp',
-                'description' => 'Recuperação de carrinho e PIX pendente pelo WhatsApp do infoprodutor (uazapi).',
+                'label' => 'Uazapi',
+                'description' => 'Recuperação de carrinho e PIX pendente pelo WhatsApp do infoprodutor via Uazapi.',
+                'default' => true,
+            ],
+            [
+                'id' => self::EVOLUTION,
+                'label' => 'Evolution API',
+                'description' => 'Recuperação de carrinho e PIX pendente pelo WhatsApp via Evolution API do infoprodutor.',
                 'default' => true,
             ],
         ];

@@ -256,6 +256,8 @@ class AppServiceProvider extends ServiceProvider
         Event::subscribe(CademiEventSubscriber::class);
         Event::subscribe(\App\Listeners\IntegraxEventSubscriber::class);
         Event::subscribe(\App\Listeners\UazapiEventSubscriber::class);
+        Event::subscribe(\App\Listeners\EvolutionEventSubscriber::class);
+        Event::subscribe(\App\Listeners\PlatformWhatsappEventSubscriber::class);
 
     }
 

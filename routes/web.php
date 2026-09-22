@@ -169,6 +169,16 @@ Route::post('/webhooks/uazapi/{secret}', [\App\Http\Controllers\Webhooks\UazapiW
     ->where('secret', '[A-Za-z0-9]{32,64}')
     ->name('webhooks.uazapi');
 
+Route::post('/webhooks/evolution/{secret}', [\App\Http\Controllers\Webhooks\EvolutionWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1')
+    ->where('secret', '[A-Za-z0-9]{32,64}')
+    ->name('webhooks.evolution');
+
+Route::post('/webhooks/platform-whatsapp/{secret}', [\App\Http\Controllers\Webhooks\PlatformWhatsappWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1')
+    ->where('secret', '[A-Za-z0-9]{32,64}')
+    ->name('webhooks.platform-whatsapp');
+
 Route::middleware(['throttle:60,1', \App\Http\Middleware\LogInboundGatewayWebhook::class])->group(function () {
     Route::post('/webhooks/gateways/linaopenx', [\App\Http\Controllers\Webhooks\LinaOpenxWebhookController::class, 'handle'])->name('webhooks.linaopenx');
     Route::post('/webhooks/gateways/spacepag', [\App\Http\Controllers\Webhooks\SpacepagWebhookController::class, 'handle'])->name('webhooks.spacepag');
@@ -727,6 +737,15 @@ Route::prefix('plataforma')->name('plataforma.')->group(function () {
         Route::post('/integrax/test', [\App\Http\Controllers\Platform\IntegraxController::class, 'test'])->name('integrax.test');
 
         Route::get('/uazapi', [\App\Http\Controllers\Platform\UazapiController::class, 'index'])->name('uazapi.index');
+
+        Route::put('/whatsapp-canal/channel', [\App\Http\Controllers\Platform\PlatformWhatsappController::class, 'updateChannel'])->name('whatsapp-canal.channel.update');
+        Route::post('/whatsapp-canal/channel/connect', [\App\Http\Controllers\Platform\PlatformWhatsappController::class, 'connect'])->name('whatsapp-canal.channel.connect');
+        Route::post('/whatsapp-canal/channel/disconnect', [\App\Http\Controllers\Platform\PlatformWhatsappController::class, 'disconnect'])->name('whatsapp-canal.channel.disconnect');
+        Route::get('/whatsapp-canal/channel/status', [\App\Http\Controllers\Platform\PlatformWhatsappController::class, 'status'])->name('whatsapp-canal.channel.status');
+        Route::put('/whatsapp-canal/templates', [\App\Http\Controllers\Platform\PlatformWhatsappController::class, 'updateTemplates'])->name('whatsapp-canal.templates.update');
+        Route::post('/whatsapp-canal/broadcast/preview', [\App\Http\Controllers\Platform\PlatformWhatsappController::class, 'broadcastPreview'])->name('whatsapp-canal.broadcast.preview');
+        Route::post('/whatsapp-canal/broadcast', [\App\Http\Controllers\Platform\PlatformWhatsappController::class, 'broadcast'])->name('whatsapp-canal.broadcast');
+        Route::post('/whatsapp-canal/test', [\App\Http\Controllers\Platform\PlatformWhatsappController::class, 'test'])->name('whatsapp-canal.test');
     });
 });
 
@@ -1152,6 +1171,22 @@ Route::middleware(['auth', 'admin.tenant', 'seller.panel', 'stacker.license', 'r
             Route::post('/integracoes/uazapi/{instance}/disconnect', [\App\Http\Controllers\UazapiIntegrationController::class, 'disconnect'])->name('integrations.uazapi.instance.disconnect');
             Route::post('/integracoes/uazapi/{instance}/default', [\App\Http\Controllers\UazapiIntegrationController::class, 'setDefault'])->name('integrations.uazapi.instance.default');
             Route::delete('/integracoes/uazapi/{instance}', [\App\Http\Controllers\UazapiIntegrationController::class, 'destroy'])->name('integrations.uazapi.instance.destroy');
+        });
+
+        Route::middleware('seller.integration:evolution')->group(function () {
+            Route::get('/integracoes/evolution', [\App\Http\Controllers\EvolutionIntegrationController::class, 'show'])->name('integrations.evolution.show');
+            Route::post('/integracoes/evolution', [\App\Http\Controllers\EvolutionIntegrationController::class, 'store'])->name('integrations.evolution.store');
+            Route::get('/integracoes/evolution/status', [\App\Http\Controllers\EvolutionIntegrationController::class, 'status'])->name('integrations.evolution.status');
+            Route::post('/integracoes/evolution/connect', [\App\Http\Controllers\EvolutionIntegrationController::class, 'connect'])->name('integrations.evolution.connect');
+            Route::post('/integracoes/evolution/disconnect', [\App\Http\Controllers\EvolutionIntegrationController::class, 'disconnect'])->name('integrations.evolution.disconnect');
+            Route::put('/integracoes/evolution', [\App\Http\Controllers\EvolutionIntegrationController::class, 'update'])->name('integrations.evolution.update');
+            Route::post('/integracoes/evolution/test', [\App\Http\Controllers\EvolutionIntegrationController::class, 'test'])->name('integrations.evolution.test');
+            Route::put('/integracoes/evolution/{instance}', [\App\Http\Controllers\EvolutionIntegrationController::class, 'update'])->name('integrations.evolution.instance.update')->whereNumber('instance');
+            Route::get('/integracoes/evolution/{instance}/status', [\App\Http\Controllers\EvolutionIntegrationController::class, 'status'])->name('integrations.evolution.instance.status')->whereNumber('instance');
+            Route::post('/integracoes/evolution/{instance}/connect', [\App\Http\Controllers\EvolutionIntegrationController::class, 'connect'])->name('integrations.evolution.instance.connect')->whereNumber('instance');
+            Route::post('/integracoes/evolution/{instance}/disconnect', [\App\Http\Controllers\EvolutionIntegrationController::class, 'disconnect'])->name('integrations.evolution.instance.disconnect')->whereNumber('instance');
+            Route::post('/integracoes/evolution/{instance}/default', [\App\Http\Controllers\EvolutionIntegrationController::class, 'setDefault'])->name('integrations.evolution.instance.default')->whereNumber('instance');
+            Route::delete('/integracoes/evolution/{instance}', [\App\Http\Controllers\EvolutionIntegrationController::class, 'destroy'])->name('integrations.evolution.instance.destroy')->whereNumber('instance');
         });
 
         Route::middleware('seller.integration:webhook')->group(function () {

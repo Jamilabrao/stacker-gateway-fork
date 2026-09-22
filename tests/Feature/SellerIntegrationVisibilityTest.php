@@ -92,6 +92,7 @@ class SellerIntegrationVisibilityTest extends TestCase
                     SellerIntegrationVisibility::WEBHOOK,
                     SellerIntegrationVisibility::CADEMI,
                     SellerIntegrationVisibility::UAZAPI,
+                    SellerIntegrationVisibility::EVOLUTION,
                 ])
             );
     }
@@ -241,9 +242,10 @@ class SellerIntegrationVisibilityTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Settings/Index')
-                ->has('seller_integrations_catalog', 5)
+                ->has('seller_integrations_catalog', 6)
                 ->where('settings.integration_webhook_enabled', true)
                 ->where('settings.integration_uazapi_enabled', true)
+                ->where('settings.integration_evolution_enabled', true)
             );
     }
 
@@ -258,6 +260,7 @@ class SellerIntegrationVisibilityTest extends TestCase
                 'integration_spedy_enabled' => true,
                 'integration_cademi_enabled' => true,
                 'integration_uazapi_enabled' => true,
+                'integration_evolution_enabled' => true,
             ])
             ->assertRedirect();
 

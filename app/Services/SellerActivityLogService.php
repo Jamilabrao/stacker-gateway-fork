@@ -237,6 +237,12 @@ class SellerActivityLogService
 
     public const INTEGRATION_UAZAPI_CAMPAIGN = 'integration.uazapi.campaign';
 
+    public const INTEGRATION_EVOLUTION_CONNECTED = 'integration.evolution.connected';
+
+    public const INTEGRATION_EVOLUTION_DISCONNECTED = 'integration.evolution.disconnected';
+
+    public const INTEGRATION_EVOLUTION_UPDATED = 'integration.evolution.updated';
+
     public const DISPUTE_DEFENSE_SUBMITTED = 'dispute.defense.submitted';
 
     public const DISPUTE_DOSSIER_GENERATED = 'dispute.dossier.generated';
@@ -347,6 +353,9 @@ class SellerActivityLogService
         self::INTEGRATION_UAZAPI_DISCONNECTED => ['group' => self::GROUP_INTEGRATION, 'label' => 'Desconectou WhatsApp (uazapi)'],
         self::INTEGRATION_UAZAPI_UPDATED => ['group' => self::GROUP_INTEGRATION, 'label' => 'Atualizou WhatsApp (uazapi)'],
         self::INTEGRATION_UAZAPI_CAMPAIGN => ['group' => self::GROUP_INTEGRATION, 'label' => 'Disparou campanha WhatsApp'],
+        self::INTEGRATION_EVOLUTION_CONNECTED => ['group' => self::GROUP_INTEGRATION, 'label' => 'Conectou Evolution API'],
+        self::INTEGRATION_EVOLUTION_DISCONNECTED => ['group' => self::GROUP_INTEGRATION, 'label' => 'Desconectou Evolution API'],
+        self::INTEGRATION_EVOLUTION_UPDATED => ['group' => self::GROUP_INTEGRATION, 'label' => 'Atualizou Evolution API'],
         self::DISPUTE_DEFENSE_SUBMITTED => ['group' => self::GROUP_DISPUTE, 'label' => 'Enviou defesa de disputa MED'],
         self::DISPUTE_DOSSIER_GENERATED => ['group' => self::GROUP_DISPUTE, 'label' => 'Gerou dossiê de disputa MED'],
         self::SUBSCRIPTION_CANCELLED => ['group' => self::GROUP_SUBSCRIPTION, 'label' => 'Cancelou assinatura'],
@@ -542,6 +551,7 @@ class SellerActivityLogService
             self::INTEGRATION_CADEMI_CREATED, self::INTEGRATION_CADEMI_UPDATED, self::INTEGRATION_CADEMI_DELETED,
             self::INTEGRATION_WEBHOOK_CREATED, self::INTEGRATION_WEBHOOK_UPDATED, self::INTEGRATION_WEBHOOK_DELETED,
             self::INTEGRATION_UAZAPI_CONNECTED, self::INTEGRATION_UAZAPI_DISCONNECTED, self::INTEGRATION_UAZAPI_UPDATED, self::INTEGRATION_UAZAPI_CAMPAIGN,
+            self::INTEGRATION_EVOLUTION_CONNECTED, self::INTEGRATION_EVOLUTION_DISCONNECTED, self::INTEGRATION_EVOLUTION_UPDATED,
             self::AFFILIATE_SETTINGS_UPDATED => $label.self::namedSuffix($metadata, 'name'),
             self::STUDENT_CREATED, self::STUDENT_UPDATED, self::STUDENT_DELETED => $label.self::namedSuffix($metadata, 'email'),
             self::COPRODUCTION_INVITED, self::COPRODUCTION_REMOVED, self::COPRODUCTION_ACCEPTED => $label.self::namedSuffix($metadata, 'email'),
